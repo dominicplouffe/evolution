@@ -12,6 +12,19 @@
     carnivore: 'hsl(350, 85%, 55%)',
   };
 
+  function heatColor(t) {
+    const stops = [[-15, [40, 80, 200]], [5, [150, 190, 235]], [15, [235, 232, 215]], [25, [240, 160, 90]], [35, [200, 50, 40]]];
+    if (t <= stops[0][0]) return stops[0][1].slice();
+    for (let k = 1; k < stops.length; k++) {
+      if (t <= stops[k][0]) {
+        const [t0, c0] = stops[k - 1], [t1, c1] = stops[k];
+        const f = (t - t0) / (t1 - t0);
+        return [c0[0] + (c1[0] - c0[0]) * f, c0[1] + (c1[1] - c0[1]) * f, c0[2] + (c1[2] - c0[2]) * f];
+      }
+    }
+    return stops[stops.length - 1][1].slice();
+  }
+
   class Renderer {
     constructor(canvas) {
       this.canvas = canvas;
@@ -95,16 +108,31 @@
       const B = Evo.BIOMES;
       const winter = Evo.clamp((1 - w.season(this.sim.time)) * 0.8, 0, 0.5);
       const F = w.food;
+      const shift = w.cfg.climate + w.seasonSwing(this.sim.time);
       for (let i = 0; i < w.biome.length; i++) {
         const b = B[w.biome[i]];
+        const o = i * 4;
+        const temp = w.tempBase[i] + shift;
+        if (this.heatMap) {
+          // Blue (cold) -> pale (mild) -> red (hot); water a little darker.
+          const c = heatColor(temp);
+          if (b.water) { c[0] = c[0] * 0.55 + 18; c[1] = c[1] * 0.55 + 40; c[2] = c[2] * 0.55 + 80; }
+          d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+          continue;
+        }
         const max = F.grass.max[i] + F.leaves.max[i] + F.algae.max[i];
         let t = max > 0 ? (F.grass.amt[i] + F.leaves.amt[i] + F.algae.amt[i]) / max : 0;
         t *= 1 - winter * 0.6;
-        const o = i * 4;
-        d[o] = b.color[0] + (b.lush[0] - b.color[0]) * t;
-        d[o + 1] = b.color[1] + (b.lush[1] - b.color[1]) * t;
-        d[o + 2] = b.color[2] + (b.lush[2] - b.color[2]) * t;
-        d[o + 3] = 255;
+        let r = b.color[0] + (b.lush[0] - b.color[0]) * t;
+        let g = b.color[1] + (b.lush[1] - b.color[1]) * t;
+        let bl = b.color[2] + (b.lush[2] - b.color[2]) * t;
+        // Snow on frozen land, ice on very cold water.
+        const snow = b.water ? Evo.clamp((-temp - 4) / 10, 0, 0.7) : Evo.clamp(-temp / 8, 0, 0.85);
+        if (snow > 0) {
+          const s = b.water ? [205, 225, 240] : [238, 242, 247];
+          r += (s[0] - r) * snow; g += (s[1] - g) * snow; bl += (s[2] - bl) * snow;
+        }
+        d[o] = r; d[o + 1] = g; d[o + 2] = bl; d[o + 3] = 255;
       }
       this.tctx.putImageData(this.image, 0, 0);
     }

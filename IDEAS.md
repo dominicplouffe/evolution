@@ -7,7 +7,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 ## Already in v1
 
 - Configurable map size, water level, and wrap-around edges (a torus, so no borders)
-- 17 evolvable genes; mutation rate is itself a gene
+- 18 evolvable genes; mutation rate is itself a gene
 - One colour per species; a new species gets a new colour
 - Size/mass trade-offs based on real scaling laws (Kleiber's law, strength ~ mass^0.67)
 - Herbivores, omnivores and carnivores on one diet slider, with a digestion trade-off
@@ -21,6 +21,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - God tools: drop creatures, grow food, smite, clone a creature
 - Save/load: autosave to the browser, continue on reload, export/import as a file
 - Evolving neural-network brains: DNA-encoded networks score the possible actions; founders start with the classic rules and behaviour evolves from there
+- Temperature (latitude, altitude, seasons, Climate setting) with snow and a heat map, and a Fur gene
 - Counterweights between genes: speed peaks at medium size, heavy bodies accelerate slowly, small bodies hide better, sprinters tire, prey fight back, long life costs upkeep, slow growth gives stronger young
 
 ## Next: small additions
@@ -29,7 +30,6 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - **Heatmap overlays**: where creatures die, where predators hunt, plant density.
 - **Random events**: drought, ice age, meteor strike, plague, an invasive species arrives.
 - **Day/night cycle** plus a `nocturnal` gene: night hunters see better in the dark.
-- **Temperature**: colder toward the poles and on mountains, plus a `fur` gene (costly in the heat, vital in the cold). This drives species apart geographically.
 
 ## Medium: richer biology
 

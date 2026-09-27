@@ -38,6 +38,18 @@
     return o;
   }
 
+  // Saves from before temperature existed: rebuild it from latitude and terrain.
+  function fallbackTemps(world) {
+    const t = new Float32Array(world.cols * world.rows);
+    const altitude = [0, 0, 0, 0.05, 0.1, 0.15, 0.6, 1];
+    for (let i = 0; i < t.length; i++) {
+      const y = Math.floor(i / world.cols);
+      const warmth = 0.5 - 0.5 * Math.cos((2 * Math.PI * (y + 0.5)) / world.rows);
+      t[i] = 2 + 32 * warmth - 24 * altitude[world.biome[i]];
+    }
+    return t;
+  }
+
   function serialize(sim) {
     const w = sim.world;
     const food = {};
@@ -51,7 +63,7 @@
       rng: sim.rng.state,
       time: sim.time,
       nextCreatureId: Evo.Creature.getNextId(),
-      world: { biome: toB64(w.biome), fertility: toB64(w.fertility), food, corpses: w.corpses },
+      world: { biome: toB64(w.biome), fertility: toB64(w.fertility), tempBase: toB64(w.tempBase), food, corpses: w.corpses },
       creatures: sim.creatures.filter((c) => c.alive).map((c) => {
         const o = { g: packGenome(c.g), state: KEEP_STATES.has(c.state) ? c.state : 'Wandering' };
         for (const k of CREATURE_FIELDS) o[k] = c[k];
@@ -96,6 +108,7 @@
     });
     world.biome = fromB64(d.world.biome, Uint8Array);
     world.fertility = fromB64(d.world.fertility, Float32Array);
+    world.tempBase = d.world.tempBase ? fromB64(d.world.tempBase, Float32Array) : fallbackTemps(world); // before v0.9
     world.food = {};
     for (const f of Evo.FOODS) {
       const saved = d.world.food[f.key];

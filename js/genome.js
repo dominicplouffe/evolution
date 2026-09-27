@@ -11,6 +11,7 @@
     { key: 'diet', label: 'Diet', min: 0, max: 1, weight: 3, desc: '0 = herbivore, 1 = carnivore. Digestion is a trade-off: good at one means bad at the other.' },
     { key: 'feeding', label: 'Browsing', min: 0, max: 1, weight: 3, desc: '0 = grazes low grass, 1 = browses tree leaves. Leaves are only reachable with a big body.' },
     { key: 'swim', label: 'Swimming', min: 0, max: 1, weight: 3, desc: 'Fast in water, eats water plants, crosses deep water above 0.5. Clumsy on land and costs upkeep.' },
+    { key: 'fur', label: 'Fur', min: 0, max: 1, weight: 2, def: 0.2, desc: 'Keeps it warm: comfortable around 26 °C with no fur, down to -12 °C with thick fur. Too warm or too cold costs energy; extremes hurt. Some upkeep.' },
     { key: 'appetite', label: 'Appetite', min: 0.2, max: 0.95, desc: 'Energy level (fraction of its reserves) below which it gets hungry and looks for food.' },
     { key: 'aggression', label: 'Aggression', min: 0, max: 1, desc: 'Willingness to attack bigger prey and to fight back. Struggling prey injure their attacker.' },
     { key: 'fear', label: 'Fear', min: 0, max: 1, desc: 'How early it runs away from predators.' },
@@ -29,7 +30,8 @@
 
   function makeGenome(base) {
     const g = {};
-    for (const gene of GENES) g[gene.key] = base[gene.key] !== undefined ? base[gene.key] : (gene.min + gene.max) / 2;
+    // Missing genes (e.g. from an older save) get their default, else the midpoint.
+    for (const gene of GENES) g[gene.key] = base[gene.key] !== undefined ? base[gene.key] : gene.def !== undefined ? gene.def : (gene.min + gene.max) / 2;
     g.brain = Evo.Brain.from(base.brain); // neural-network weights (see brain.js)
     return g;
   }
@@ -109,7 +111,7 @@
     const armorSlow = 1 - 0.35 * g.armor;
     // Long life isn't free: a body built to last spends more on repair.
     const repair = 0.2 * clamp((g.lifespan - 60) / 340, 0, 1);
-    const upkeep = 0.5 + 0.17 * g.speed + 0.1 * g.stamina + 0.15 * g.sense + 0.3 * g.armor + 0.12 * g.camo + 0.15 * g.swim + repair;
+    const upkeep = 0.5 + 0.17 * g.speed + 0.1 * g.stamina + 0.15 * g.sense + 0.3 * g.armor + 0.12 * g.camo + 0.15 * g.swim + 0.08 * g.fur + repair;
     // Slow-maturing species grow into sturdier adults.
     const matFrac = clamp((g.maturity - 6) / 54, 0, 1);
     // Diet: a straight trade-off, so omnivores are workable stepping stones
@@ -137,6 +139,9 @@
       turnRate: 5 / Math.sqrt(s),
       maxStamina: 2 + 5 * g.stamina,
       staminaRegen: 0.3 + 0.5 * g.stamina,
+      // Temperature it's comfortable at: fur keeps it warm, and big bodies hold
+      // heat better (Bergmann's rule).
+      comfortTemp: 26 - 38 * g.fur - 3 * (s - 1),
       // Fast-twitch muscle burns out quickly: sprinters tire sooner.
       sprintDrain: 0.6 + 0.4 * g.speed,
       // Small bodies are harder to spot.

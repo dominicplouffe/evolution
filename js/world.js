@@ -90,6 +90,7 @@
       const n = this.cols * this.rows;
       this.biome = new Uint8Array(n);
       this.fertility = new Float32Array(n); // land food capacity, for spawning
+      this.tempBase = new Float32Array(n);  // average temperature (°C) before seasons
       // food[key] = { amt, max } per tile.
       this.food = {};
       for (const f of FOODS) this.food[f.key] = { amt: new Float32Array(n), max: new Float32Array(n) };
@@ -125,7 +126,28 @@
           this.food[f.key].amt[i] = Evo.K.PLANT_MAX * cap * start;
         }
         this.fertility[i] = BIOMES[b].water ? 0 : ((BIOMES[b].food.grass || 0) + (BIOMES[b].food.leaves || 0)) * lush;
+        // Temperature: warm in the middle band, cold toward the top and bottom
+        // edges (continuous across wrap-around), and colder with altitude.
+        const y = Math.floor(i / w);
+        const warmth = 0.5 - 0.5 * Math.cos((2 * Math.PI * (y + 0.5)) / h);
+        const altitude = Evo.clamp((e - (wl + 0.035)) / (1 - wl), 0, 1);
+        this.tempBase[i] = 2 + 32 * warmth - 24 * altitude;
       }
+    }
+
+    // Temperature (°C) of a tile right now: its base, the season, and the
+    // Climate setting. Seasons swing it by about ±12 °C at default strength.
+    tempAt(i, time) {
+      return this.tempBase[i] + this.cfg.climate + this.seasonSwing(time);
+    }
+
+    seasonSwing(time) {
+      return (this.season(time) - 1) * 40;
+    }
+
+    tempAtPoint(x, y, time) {
+      const i = this.tileIndex(x, y);
+      return i < 0 ? 0 : this.tempAt(i, time);
     }
 
     // Shortest signed delta from a to b, respecting wrap-around.
@@ -216,13 +238,19 @@
       // summer. Even a grazed-bare tile recovers, so herds don't wipe out
       // their food for minutes. A tile's max encodes its fertility.
       const g = (Evo.K.PLANT_REGROW * this.cfg.plantGrowth * this.season(time) * dt) / Evo.K.PLANT_MAX;
+      // Plants grow slower in the cold and stop in hard frost (below -3 °C).
+      const shift = this.cfg.climate + this.seasonSwing(time);
+      const tb = this.tempBase;
       for (const f of FOODS) {
         const amt = this.food[f.key].amt, max = this.food[f.key].max;
         for (let i = 0; i < amt.length; i++) {
           const m = max[i];
           if (m <= 0) continue;
+          const t = tb[i] + shift;
+          if (t <= -3) continue;
+          const warm = t >= 10 ? 1 : (t + 3) / 13;
           const p = amt[i] / m;
-          amt[i] = Math.min(m, amt[i] + g * m * (1 - 0.6 * p));
+          amt[i] = Math.min(m, amt[i] + g * warm * m * (1 - 0.6 * p));
         }
       }
       // Corpses rot away.

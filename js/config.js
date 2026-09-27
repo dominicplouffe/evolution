@@ -12,6 +12,7 @@
     { key: 'initialCarnivores', label: 'Starting carnivores', type: 'int', min: 0, max: 500, def: 16 },
     { key: 'plantGrowth', label: 'Plant growth ×', type: 'float', min: 0.1, max: 5, step: 0.1, def: 1 },
     { key: 'mutationScale', label: 'Mutation ×', type: 'float', min: 0, max: 5, step: 0.1, def: 1 },
+    { key: 'climate', label: 'Climate (°C shift)', type: 'int', min: -25, max: 25, def: 0 },
     { key: 'seasonStrength', label: 'Season strength', type: 'float', min: 0, max: 0.9, step: 0.05, def: 0.3 },
     { key: 'seasonLength', label: 'Year length (s)', type: 'int', min: 30, max: 2000, def: 240 },
     { key: 'maxPopulation', label: 'Population cap (big = slower)', type: 'int', min: 50, max: 20000, def: 1500 },

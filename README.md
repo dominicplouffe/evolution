@@ -37,8 +37,14 @@ starting populations, plant growth, mutation rate, seasons and more.
   beach, plains, grassland, forest, rock, peaks). Each tile has a fertility and a
   plant food that regrows (faster in summer). With **wrap
   edges** on, the map is a torus: no borders, you can scroll forever.
+- **Temperature**: each tile's temperature depends on latitude (warm in the
+  middle band of the map, cold toward the top and bottom edges, continuous
+  across wrap-around) and altitude (mountains are colder), plus the seasons
+  (about ±12 °C) and the **Climate** setting. Plants grow slower in the cold and
+  stop in hard frost. Snow shows on frozen ground; **Heat map** shows
+  temperature directly, and the corner shows the temperature under the cursor.
 - **DNA** (`js/genome.js`): size, muscle, stamina, senses, diet (0 = plants,
-  1 = meat), browsing (grass vs. tree leaves), swimming, appetite, aggression, fear, armor,
+  1 = meat), browsing (grass vs. tree leaves), swimming, fur, appetite, aggression, fear, armor,
   camouflage, herding, litter size, maturity age, lifespan, mutation rate (itself
   evolvable).
 - **Plant food & niches**: tiles grow three foods: grass (open land), tree leaves
@@ -58,6 +64,11 @@ starting populations, plant growth, mutation rate, seasons and more.
 - **Body from DNA**: mass = size³. Bigger means more health, strength and fat
   storage, but hungrier. Resting cost scales with mass^0.75 (Kleiber's law),
   movement costs mass × speed². Every "good" gene has an upkeep cost.
+- **Fur**: sets the temperature a creature is comfortable at (about 26 °C with no
+  fur, -12 °C with thick fur; big bodies hold heat better). More than 8 °C off
+  costs extra energy, and extremes hurt (deaths show as "cold" / "heat").
+  Uncomfortable creatures move to a better spot when idle. Fur has a small
+  upkeep cost, so warm-climate animals lose it.
 - **Trade-offs between genes**: top speed peaks at medium size (Hirt et al. 2017)
   and heavy bodies accelerate slowly; small bodies are harder to spot; more
   Muscle drains stamina faster when sprinting; struggling prey injure their

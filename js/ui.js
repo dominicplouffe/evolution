@@ -314,6 +314,11 @@
         this.updateMapLegend();
       });
       $('#showSense').addEventListener('change', (e) => { this.renderer.showSense = e.target.checked; });
+      $('#heatMap').addEventListener('change', (e) => {
+        this.renderer.heatMap = e.target.checked;
+        this.renderer.lastTerrain = -1;
+        this.updateMapLegend();
+      });
       $('#chartMetric').addEventListener('change', (e) => this.chart.setMetric(e.target.value));
       $('#newWorld').addEventListener('click', () => { this.readSettings(); this.newWorld(); });
       $('#resetSettings').addEventListener('click', () => {
@@ -430,6 +435,12 @@
           over time, so a predator can gorge on one kill and rest for a long while, but plant-eaters must keep grazing.</li>
           <li><b>Hunger</b>: a creature only looks for food when its energy drops below its <b>Appetite</b> gene, and
           stops once it is full. A full predator ignores prey.</li>
+          <li><b>Temperature</b>: warm in the middle band of the map, cold toward the top and bottom edges and on
+          mountains, and it swings with the seasons (snow shows where it's freezing; tick <b>Heat map</b> to see it).
+          Plants grow slower in the cold and stop in hard frost. The <b>Fur</b> gene sets the temperature a creature is
+          comfortable at (big bodies hold heat better too); outside that range it burns extra energy, and extremes hurt.
+          Uncomfortable creatures move somewhere better when they can. The <b>Climate</b> setting shifts the whole world
+          warmer or colder.</li>
           <li><b>Food</b>: three kinds of plants regrow (faster in summer): <b>grass</b> on open land, <b>tree leaves</b>
           in forests, and <b>water plants</b> in the shallows. Dead creatures leave meat that rots.</li>
           <li><b>Niches</b>: small-mouthed <b>grazers</b> eat grass; big <b>browsers</b> reach tree leaves
@@ -470,7 +481,7 @@
       const season = sim.seasonName();
       const icon = { Spring: '🌱', Summer: '☀️', Autumn: '🍂', Winter: '❄️' }[season];
       const rate = this.paused ? 'paused' : `${fmt(this.simRate.rate, 1)}× speed`;
-      $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}<br><span class="muted">${rate} · seed ${sim.seed}</span><br><span class="muted small">v${Evo.VERSION.number} · ${Evo.VERSION.date}</span>`;
+      $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}<br><span class="muted">${rate} · seed ${sim.seed}</span>${this.hover ? `<br>🌡 ${fmt(sim.world.tempAtPoint(this.wrapPoint(this.hover).x, this.wrapPoint(this.hover).y, sim.time))} °C here` : ''}<br><span class="muted small">v${Evo.VERSION.number} · ${Evo.VERSION.date}</span>`;
 
       this.chart.draw(sim.history);
       if (!this.pressing) {
@@ -506,7 +517,9 @@
       const p = c.phen;
       const bar = (label, v, max, color, num) =>
         `<div class="label">${label}</div><div class="bar"><span style="width:${Evo.clamp((v / max) * 100, 0, 100)}%;background:${color}"></span></div><div class="num">${num}</div>`;
-      const status = c.alive ? `${esc(c.state)} · ${c.hungry ? '😋 hungry' : '😌 not hungry'}` : `💀 Died (${esc(c.deathCause || 'unknown')})`;
+      const stress = c.thermalStress();
+      const feel = stress < 0 ? ' · 🥶 cold' : stress > 0 ? ' · 🥵 hot' : '';
+      const status = c.alive ? `${esc(c.state)} · ${c.hungry ? '😋 hungry' : '😌 not hungry'}${feel}` : `💀 Died (${esc(c.deathCause || 'unknown')})`;
       const genes = Evo.GENES.filter((g) => !g.neutral).map((g) => {
         const v = c.g[g.key];
         return bar(esc(g.label), v - g.min, g.max - g.min, 'var(--accent)', fmt(v, g.max > 10 ? 0 : 2));
@@ -532,6 +545,7 @@
           <span class="k">Digests grass · leaves</span><span>${fmt(p.eat.grass * 100)}% · ${fmt(p.eat.leaves * 100)}%</span>
           <span class="k">Water plants · meat</span><span>${fmt(p.eat.algae * 100)}% · ${fmt(p.meatEff * 100)}%</span>
           <span class="k">Upkeep</span><span>${fmt(p.basal, 2)} energy/s</span>
+          <span class="k">Temperature · comfy at</span><span>${fmt(c.temp)} °C · ${fmt(p.comfortTemp)} °C (±8)</span>
           <span class="k">Gets hungry below</span><span>${fmt(c.g.appetite * 100)}% energy</span>
           <span class="k">Meal in stomach</span><span>${fmt(c.stomachCal)} calories</span>
         </div>
@@ -553,6 +567,7 @@
       let items = [];
       if (mode === 'niche') items = Object.entries(Evo.NICHE_COLORS);
       if (mode === 'diet') items = [['plants', 'hsl(120,75%,45%)'], ['mixed', 'hsl(60,75%,45%)'], ['meat', 'hsl(0,75%,45%)']];
+      if (this.renderer.heatMap) items = items.concat([['−15 °C', 'rgb(40,80,200)'], ['5', 'rgb(150,190,235)'], ['15', 'rgb(235,232,215)'], ['25', 'rgb(240,160,90)'], ['35 °C', 'rgb(200,50,40)']]);
       el.style.display = items.length ? 'flex' : 'none';
       el.innerHTML = items.map(([k, c]) => `<span><span class="dot" style="background:${c}"></span>${k}</span>`).join('');
     }

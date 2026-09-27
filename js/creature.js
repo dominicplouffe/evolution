@@ -68,6 +68,7 @@
       this.wanderTurn = 0;
       this.herdSize = 0;
       this.stealth = 1;
+      this.temp = this.phen.comfortTemp;
       this.home = null;
       this.chasedBy = null;
       this.sprinting = false;
@@ -103,9 +104,19 @@
       return this.phen.senseRadius * o.stealth;
     }
 
-    updateStealth(world) {
-      const cover = world.biomeAt(this.x, this.y).cover;
+    updateStealth(world, time) {
+      const i = world.tileIndex(this.x, this.y);
+      const cover = i < 0 ? 0 : Evo.BIOMES[world.biome[i]].cover;
       this.stealth = (1 - this.g.camo * (0.3 + 0.5 * cover)) * this.phen.visibility;
+      this.temp = i < 0 ? 0 : world.tempAt(i, time);
+    }
+
+    // How far the local temperature is outside my comfort zone (°C, 0 = fine).
+    // Negative = too cold, positive = too hot.
+    thermalStress() {
+      const d = this.temp - this.phen.comfortTemp;
+      const tol = 8;
+      return d > tol ? d - tol : d < -tol ? d + tol : 0;
     }
 
     think(sim) {
@@ -326,7 +337,7 @@
       const swim = this.g.swim;
       const inWater = !!world.biomeAt(this.x, this.y).water;
       const wantWater = swim >= 0.5;
-      if (inWater === wantWater || (swim > 0.3 && swim < 0.5)) return null;
+      if (inWater === wantWater || (swim > 0.3 && swim < 0.5)) return this.findComfort(world, rng);
       let best = null, bestD = Infinity;
       const r0 = this.phen.senseRadius;
       for (let i = 0; i < 16; i++) {
@@ -338,6 +349,26 @@
           if (r0 * f < bestD) { bestD = r0 * f; best = { x, y }; }
           break;
         }
+      }
+      return best;
+    }
+
+    // Too cold or too hot here? Look for a more comfortable spot in view.
+    findComfort(world, rng) {
+      const now = Math.abs(this.thermalStress());
+      if (now < 6) return null; // put up with mild discomfort
+      const time = world.lastTime || 0;
+      const comfort = this.phen.comfortTemp, swim = this.g.swim;
+      let best = null, bestStress = now - 3; // must be clearly better
+      const r0 = this.phen.senseRadius;
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + rng.float(0, 0.5);
+        const r = r0 * (i % 2 ? 0.5 : 1);
+        const x = this.x + Math.cos(a) * r, y = this.y + Math.sin(a) * r;
+        if (!world.canEnter(x, y, swim)) continue;
+        const d = Math.abs(world.tempAtPoint(x, y, time) - comfort);
+        const st = d > 8 ? d - 8 : 0;
+        if (st < bestStress) { bestStress = st; best = { x, y }; }
       }
       return best;
     }
@@ -442,6 +473,16 @@
 
       const p = this.phen;
       this.digest(dt);
+
+      // Too cold (shivering) or too hot costs energy; extremes hurt.
+      const stress = Math.abs(this.thermalStress());
+      if (stress > 0) {
+        this.energy -= p.basal * 0.04 * stress * dt;
+        if (stress > 18) {
+          this.health -= p.maxHealth * 0.006 * (stress - 18) * dt;
+          if (this.health <= 0) this.deathCause = this.thermalStress() < 0 ? 'cold' : 'heat';
+        }
+      }
 
       // Swimmers dry out on land, which costs extra energy.
       if (this.g.swim > 0.5 && !world.biomeAt(this.x, this.y).water) this.energy -= p.basal * 1.2 * (this.g.swim - 0.5) * dt;
