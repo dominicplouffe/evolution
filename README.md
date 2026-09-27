@@ -22,6 +22,7 @@ No build step and no dependencies. Either:
 | Inspect a creature | Inspect tool (<kbd>I</kbd>), click it. <kbd>F</kbd> follows it, <kbd>Esc</kbd> deselects |
 | Drop creatures | Herbivore (<kbd>H</kbd>) / Carnivore (<kbd>C</kbd>) tool, click the map |
 | Grow food / smite | <kbd>G</kbd> / <kbd>X</kbd>, click or drag |
+| Save / continue later | **💾 Save** in the side panel (autosaves every minute and when you leave). Reopening the page continues your world. **Export**/**Import** save it as a `.json` file |
 | Fit whole map | <kbd>0</kbd> (or <kbd>Home</kbd>), or the **Fit map** button |
 
 The side panel shows live stats, a history chart (population by diet, or the
@@ -88,6 +89,7 @@ js/genome.js        genes, mutation, crossover, DNA -> body, species
 js/world.js         terrain, plants, carcasses, spatial hash, wrap-around
 js/creature.js      creature state + behaviour
 js/sim.js           simulation loop, births, deaths, stats, migration
+js/save.js          save/load: browser storage (gzipped) and .json files
 js/renderer.js      canvas drawing + camera
 js/chart.js         history chart
 js/ui.js            input, panels, game loop

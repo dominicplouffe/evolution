@@ -602,5 +602,8 @@
   }
 
   Creature.STATE = STATE;
+  // Creature ids keep counting up across save/load.
+  Creature.getNextId = () => nextId;
+  Creature.setNextId = (n) => { nextId = n; };
   Evo.Creature = Creature;
 })((globalThis.Evo = globalThis.Evo || {}));

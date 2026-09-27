@@ -100,6 +100,8 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 #events div { padding: 2px 0; border-bottom: 1px solid #1e2734; color: var(--text-2); }
 #events .t { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
 
+.save-auto { display: flex; gap: 6px; align-items: center; margin-top: 8px; color: var(--text-2); }
+#saveStatus { margin: 6px 0 0; }
 #settings { display: grid; grid-template-columns: 1fr 110px; gap: 6px 8px; align-items: center; margin-bottom: 10px; }
 #settings label { color: var(--text-2); }
 #settings input[type=number] { width: 100%; }

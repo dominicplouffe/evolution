@@ -40,22 +40,119 @@
       this.buildAbout();
       this.bindControls();
       this.bindCanvas();
-      this.newWorld();
-      this.last = performance.now();
+      this.bindSave();
       this.lastUi = 0;
+      this.start();
+    }
+
+    // Continue the saved world if there is one, otherwise start fresh.
+    async start() {
+      let resumed = false;
+      if (Evo.Save.storageInfo()) {
+        try {
+          const sim = await Evo.Save.loadFromStorage();
+          if (sim) {
+            this.useSim(sim, true);
+            resumed = true;
+            this.toast(`Continuing your saved world (${Evo.fmtTime(sim.time)} in)`);
+          }
+        } catch (e) {
+          console.warn('Could not load save', e);
+          this.toast('Could not load your saved world, starting a new one');
+        }
+      }
+      if (!resumed) this.newWorld();
+      this.last = performance.now();
       requestAnimationFrame((t) => this.frame(t));
     }
 
     newWorld() {
-      this.sim = new Evo.Simulation(Object.assign({}, this.cfg));
-      this.renderer.attach(this.sim);
+      this.useSim(new Evo.Simulation(Object.assign({}, this.cfg)), false);
+      this.toast(`New world · seed ${this.sim.seed}`);
+    }
+
+    useSim(sim, fromSave) {
+      this.sim = sim;
+      this.renderer.attach(sim);
       this.selected = null;
       this.follow = false;
       this.acc = 0;
-      this.simRate = { t: 0, at: performance.now(), rate: this.speed };
+      this.simRate = { t: sim.time, at: performance.now(), rate: this.speed };
+      if (fromSave) {
+        // Show the loaded world's settings (the live ones keep applying to it).
+        this.cfg = Object.assign({}, sim.cfg);
+        saveSettings(this.cfg);
+        this.buildSettings();
+      }
       this.updateUI(true);
-      this.toast(`New world · seed ${this.sim.seed}`);
     }
+
+    // ------------------------------------------------------------ save / load
+    bindSave() {
+      let auto = true;
+      try { auto = localStorage.getItem('evolution.autosave') !== 'off'; } catch (e) { /* default on */ }
+      $('#autosave').checked = auto;
+      $('#autosave').addEventListener('change', (e) => {
+        try { localStorage.setItem('evolution.autosave', e.target.checked ? 'on' : 'off'); } catch (err) { /* ignore */ }
+      });
+      $('#saveBtn').addEventListener('click', () => this.save(false));
+      $('#loadBtn').addEventListener('click', () => this.loadSaved());
+      $('#exportBtn').addEventListener('click', () => {
+        Evo.Save.exportFile(this.sim);
+        this.toast('World exported as a file');
+      });
+      $('#importBtn').addEventListener('click', () => $('#importFile').click());
+      $('#importFile').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        e.target.value = '';
+        if (!file) return;
+        try {
+          this.useSim(await Evo.Save.importFile(file), true);
+          this.toast(`Loaded ${file.name}`);
+        } catch (err) {
+          console.warn(err);
+          this.toast("That file isn't a saved world");
+        }
+      });
+      setInterval(() => { if ($('#autosave').checked) this.save(true); }, 60000);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden' && $('#autosave').checked) this.save(true);
+      });
+      const info = Evo.Save.storageInfo();
+      this.setSaveStatus(info ? 'A saved world is stored in this browser.' : 'Nothing saved yet.');
+    }
+
+    async save(quiet) {
+      if (this.saving || !this.sim) return;
+      this.saving = true;
+      try {
+        const r = await Evo.Save.saveToStorage(this.sim);
+        const when = r.savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        this.setSaveStatus(`${quiet ? 'Autosaved' : 'Saved'} at ${when} · ${Evo.fmtTime(this.sim.time)} into the run · ${Math.round(r.bytes / 1024)} KB`);
+        if (!quiet) this.toast('World saved');
+      } catch (e) {
+        console.warn('Save failed', e);
+        this.setSaveStatus('Could not save to browser storage (full or blocked). Use Export instead.');
+        if (!quiet) this.toast('Browser storage is full or blocked, use Export to save a file');
+      } finally {
+        this.saving = false;
+      }
+    }
+
+    async loadSaved() {
+      if (!Evo.Save.storageInfo()) { this.toast('Nothing saved yet'); return; }
+      if (!window.confirm('Replace the current world with your last save?')) return;
+      try {
+        const sim = await Evo.Save.loadFromStorage();
+        this.useSim(sim, true);
+        this.toast(`Loaded your save (${Evo.fmtTime(sim.time)} in)`);
+      } catch (e) {
+        console.warn(e);
+        this.toast('Could not load the save');
+      }
+    }
+
+    setSaveStatus(text) { $('#saveStatus').textContent = text; }
 
     // ------------------------------------------------------------ main loop
     frame(now) {

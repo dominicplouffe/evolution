@@ -58,6 +58,19 @@
       </section>
 
       <section class="panel">
+        <h2>Save &amp; load</h2>
+        <div class="row">
+          <button id="saveBtn" class="primary" title="Save this world in your browser">💾 Save</button>
+          <button id="loadBtn" title="Go back to your last save">📂 Load</button>
+          <button id="exportBtn" title="Download this world as a file">⬇ Export</button>
+          <button id="importBtn" title="Open a world file you exported">⬆ Import</button>
+          <input type="file" id="importFile" accept=".json,.gz,application/json" hidden />
+        </div>
+        <label class="check small save-auto"><input type="checkbox" id="autosave" /> Autosave every minute and when you leave</label>
+        <p id="saveStatus" class="muted small"></p>
+      </section>
+
+      <section class="panel">
         <div class="row between">
           <h2>History</h2>
           <select id="chartMetric"></select>
@@ -109,6 +122,7 @@
   <script src="js/world.js"></script>
   <script src="js/creature.js"></script>
   <script src="js/sim.js"></script>
+  <script src="js/save.js"></script>
   <script src="js/renderer.js"></script>
   <script src="js/chart.js"></script>
   <script src="js/ui.js"></script>

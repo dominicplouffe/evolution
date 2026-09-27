@@ -18,10 +18,10 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - Calories per food (meat is dense, plants are bulky), a stomach that digests over time, and an evolvable Appetite (hunger threshold)
 - Seasons, carcasses that rot, camouflage that works best in forests
 - God tools: drop creatures, grow food, smite, clone a creature
+- Save/load: autosave to the browser, continue on reload, export/import as a file
 
 ## Next: small additions
 
-- **Save/load**: export the world as JSON (or save to localStorage) so a run can go on for days.
 - **Hall of fame**: oldest creature, most kills, most children, longest-lived species.
 - **Heatmap overlays**: where creatures die, where predators hunt, plant density.
 - **Random events**: drought, ice age, meteor strike, plague, an invasive species arrives.
