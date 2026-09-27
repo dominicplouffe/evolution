@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Evolution Sandbox</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <main id="stage">
+      <canvas id="view"></canvas>
+
+      <div id="toolbar" class="panel">
+        <div class="group" id="tools">
+          <button data-tool="inspect" class="active" title="Click a creature to inspect it. Drag to pan. (I)">🔍 Inspect</button>
+          <button data-tool="herbivore" title="Click to drop a herbivore (H)">🐑 Herbivore</button>
+          <button data-tool="carnivore" title="Click to drop a carnivore (C)">🐺 Carnivore</button>
+          <button data-tool="food" title="Click/drag to grow plants (G)">🌱 Grow food</button>
+          <button data-tool="smite" title="Click/drag to kill creatures (X)">⚡ Smite</button>
+        </div>
+        <div class="group">
+          <label>Color by
+            <select id="colorMode">
+              <option value="species">Species</option>
+              <option value="diet">Diet</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="showSense" /> Senses</label>
+        </div>
+      </div>
+
+      <div id="hud" class="panel"></div>
+      <div id="help" class="panel">
+        Drag to pan · Wheel to zoom · <kbd>Space</kbd> pause · <kbd>1</kbd>–<kbd>6</kbd> speed ·
+        <kbd>F</kbd> follow · <kbd>Esc</kbd> deselect · <kbd>Home</kbd> fit map
+      </div>
+      <div id="toast"></div>
+    </main>
+
+    <aside id="side">
+      <section class="panel">
+        <div class="row">
+          <button id="playPause" class="primary">⏸ Pause</button>
+          <div id="speeds" class="seg">
+            <button data-speed="0.5">½×</button>
+            <button data-speed="1" class="active">1×</button>
+            <button data-speed="2">2×</button>
+            <button data-speed="4">4×</button>
+            <button data-speed="8">8×</button>
+            <button data-speed="32">Max</button>
+          </div>
+        </div>
+        <div id="stats" class="stats"></div>
+      </section>
+
+      <section class="panel">
+        <div class="row between">
+          <h2>History</h2>
+          <select id="chartMetric"></select>
+        </div>
+        <div id="chartLegend" class="legend"></div>
+        <div class="chart-wrap">
+          <canvas id="chart"></canvas>
+          <div id="chartTip" class="tip"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="inspectorPanel">
+        <h2>Creature</h2>
+        <div id="inspector"><p class="muted">Click a creature on the map to see its DNA.</p></div>
+      </section>
+
+      <section class="panel">
+        <h2>Species <span id="speciesCount" class="muted"></span></h2>
+        <div id="speciesList"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Events</h2>
+        <div id="events"></div>
+      </section>
+
+      <details class="panel" id="settingsPanel">
+        <summary><h2>World settings</h2></summary>
+        <form id="settings"></form>
+        <div class="row">
+          <button id="newWorld" class="primary">New world</button>
+          <button id="resetSettings">Defaults</button>
+        </div>
+        <p class="muted small">Settings are remembered in this browser. Changes apply when you start a new world
+          (plant growth, mutation, seasons and caps also apply live).</p>
+      </details>
+
+      <details class="panel">
+        <summary><h2>How it works</h2></summary>
+        <div id="about"></div>
+      </details>
+    </aside>
+  </div>
+
+  <script src="js/rng.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/genome.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/creature.js"></script>
+  <script src="js/sim.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/chart.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

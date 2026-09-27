@@ -1,0 +1,450 @@
+// A creature: body built from its genome, plus a small priority-based brain.
+// Priorities: flee > fight back > mate > eat (plants / carrion / hunt) > wander.
+(function (Evo) {
+  'use strict';
+
+  const STATE = {
+    WANDER: 'Wandering',
+    GRAZE: 'Looking for plants',
+    EAT: 'Eating',
+    SCAVENGE: 'Going for carrion',
+    HUNT: 'Hunting',
+    FIGHT: 'Fighting back',
+    FLEE: 'Fleeing',
+    MATE: 'Courting',
+    REST: 'Resting',
+  };
+
+  let nextId = 1;
+
+  function angleDiff(a, b) {
+    let d = b - a;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    return d;
+  }
+
+  class Creature {
+    constructor(sim, genome, x, y, opts = {}) {
+      this.id = nextId++;
+      this.g = genome;
+      this.x = x;
+      this.y = y;
+      this.heading = sim.rng.float(0, Math.PI * 2);
+      this.v = 0;
+      this.age = 0;
+      this.grow = opts.adult ? 1 : 0;
+      this.phen = Evo.Genome.phenotype(genome, this.grow);
+      this.health = this.phen.maxHealth;
+      this.energy = opts.energy !== undefined ? Math.min(opts.energy, this.phen.maxEnergy) : this.phen.maxEnergy * 0.7;
+      this.stamina = this.phen.maxStamina;
+      this.exhausted = false;
+      this.alive = true;
+      this.species = opts.species;
+      this.generation = opts.generation || 0;
+      this.parentIds = opts.parentIds || [];
+      this.children = 0;
+      this.kills = 0;
+      this.reproCooldown = genome.maturity * 0.3;
+      this.mateSearch = 0;
+      this.state = STATE.WANDER;
+      this.target = null;       // creature, corpse or {x, y}
+      this.targetKind = null;   // 'creature' | 'corpse' | 'tile'
+      this.fleeX = 0;
+      this.fleeY = 0;
+      this.chaseTime = 0;
+      this.huntCooldown = 0;
+      this.lastAttacker = null;
+      this.lastAttackedAt = -99;
+      this.thinkTimer = sim.rng.float(0, 0.3);
+      this.wanderTurn = 0;
+      this.sprinting = false;
+      this.deathCause = null;
+      this.bornAt = sim.time;
+    }
+
+    get dietClass() {
+      const d = this.g.diet;
+      return d < 0.33 ? 'herbivore' : d < 0.66 ? 'omnivore' : 'carnivore';
+    }
+
+    isReadyToMate() {
+      return this.grow >= 1 && this.reproCooldown <= 0 && this.energy >= 0.75 * this.phen.maxEnergy && this.age < this.g.lifespan;
+    }
+
+    canMateWith(o) {
+      return o !== this && o.alive && o.isReadyToMate() &&
+        (o.species === this.species || Evo.Genome.distance(this.g, o.g) < Evo.K.MATE_THRESHOLD);
+    }
+
+    // Does `o` look like a danger to me?
+    isThreat(o) {
+      return o.g.diet >= Evo.K.PREDATOR_DIET && o.species !== this.species && o.grow > 0.6 &&
+        o.phen.strength * 6 > this.phen.maxHealth * 0.25 && o.phen.mass > this.phen.mass * 0.35;
+    }
+
+    // How far away can I spot `o`? Camouflage works best under cover.
+    detectRange(o, world) {
+      const cover = world.biomeAt(o.x, o.y).cover;
+      return this.phen.senseRadius * (1 - o.g.camo * (0.3 + 0.5 * cover));
+    }
+
+    think(sim) {
+      const world = sim.world;
+      const p = this.phen, g = this.g;
+      const sense = p.senseRadius;
+
+      // ---- scan surroundings
+      let fx = 0, fy = 0, threats = 0;
+      let mate = null, mateD = Infinity;
+      let prey = null, preyScore = 0;
+      let herdX = 0, herdY = 0, herdHX = 0, herdHY = 0, herdN = 0;
+      const fleeDist = sense * (0.2 + 0.8 * g.fear);
+      const hungry = this.energy < 0.85 * p.maxEnergy;
+      const canHunt = g.diet >= Evo.K.PREDATOR_DIET && this.grow > 0.7 && this.huntCooldown <= 0 && hungry;
+      const ready = this.isReadyToMate();
+
+      sim.hash.query(this.x, this.y, sense, (o, dx, dy, d2) => {
+        if (o === this || !o.alive) return;
+        const d = Math.sqrt(d2) || 0.01;
+        if (d > this.detectRange(o, world)) return;
+        // Only a hunting predator is scary from afar; an idle one only up close.
+        if (this.isThreat(o) && d < (o.state === STATE.HUNT ? fleeDist : fleeDist * 0.3)) {
+          // Weight by closeness and by how outmatched I am.
+          const w = (1 / d) * Math.min(3, o.phen.strength / (p.strength + 0.5) + 0.5);
+          fx -= (dx / d) * w;
+          fy -= (dy / d) * w;
+          threats++;
+        }
+        if (o.species === this.species) {
+          herdX += dx; herdY += dy;
+          herdHX += Math.cos(o.heading); herdHY += Math.sin(o.heading);
+          herdN++;
+        }
+        if (ready && d < mateD && this.canMateWith(o)) { mate = o; mateD = d; }
+        if (canHunt && o.species !== this.species) {
+          const bravery = 0.8 + 1.5 * g.aggression;
+          if (o.phen.mass < p.mass * bravery && o.health < p.strength * 12 * (0.5 + g.aggression)) {
+            const s = (o.phen.mass * Evo.K.MEAT_PER_MASS * p.meatEff) / (d + 30);
+            if (s > preyScore) { preyScore = s; prey = o; }
+          }
+        }
+      });
+
+      // ---- 1. flee
+      if (threats > 0 && (fx !== 0 || fy !== 0)) {
+        this.state = STATE.FLEE;
+        this.fleeX = fx; this.fleeY = fy;
+        this.target = null;
+        return;
+      }
+
+      // ---- 2. fight back (or run from) whoever is biting me
+      const att = this.lastAttacker;
+      if (att && att.alive && sim.time - this.lastAttackedAt < 2) {
+        if (g.aggression > 0.5 && p.strength > att.phen.strength * 0.6) {
+          this.setTarget(STATE.FIGHT, att, 'creature');
+        } else {
+          this.state = STATE.FLEE;
+          this.fleeX = -world.dx(this.x, att.x);
+          this.fleeY = -world.dy(this.y, att.y);
+        }
+        return;
+      }
+
+      // Keep chasing a current prey rather than re-deciding every think.
+      if (this.state === STATE.HUNT && this.target && this.target.alive && this.chaseTime < 10) return;
+
+      // ---- 3. mate
+      if (mate) {
+        this.setTarget(STATE.MATE, mate, 'creature');
+        this.mateSearch = 0;
+        return;
+      }
+
+      // ---- 4. food
+      if (hungry) {
+        let best = null, bestScore = 0, bestKind = null, bestState = null;
+        if (prey) { best = prey; bestScore = preyScore * 0.8; bestKind = 'creature'; bestState = STATE.HUNT; }
+
+        if (p.meatEff > 0.15) {
+          world.corpseHash.query(this.x, this.y, sense, (c, dx, dy, d2) => {
+            const s = (Math.min(c.energy, p.maxEnergy) * p.meatEff) / (Math.sqrt(d2) + 30);
+            if (s > bestScore) { bestScore = s; best = c; bestKind = 'corpse'; bestState = STATE.SCAVENGE; }
+          });
+        }
+
+        if (p.plantEff > 0.1) {
+          const here = world.tileIndex(this.x, this.y);
+          if (here >= 0 && world.plant[here] > 2) {
+            const s = (world.plant[here] * p.plantEff) / 20;
+            if (s > bestScore) { bestScore = s; best = null; bestKind = 'here'; bestState = STATE.EAT; }
+          }
+          // Sample a handful of tiles in view instead of scanning all of them.
+          for (let i = 0; i < 10; i++) {
+            const a = sim.rng.float(0, Math.PI * 2);
+            const r = sense * Math.sqrt(sim.rng.next());
+            const tx = this.x + Math.cos(a) * r, ty = this.y + Math.sin(a) * r;
+            const ti = world.tileIndex(tx, ty);
+            if (ti < 0) continue;
+            const s = (world.plant[ti] * p.plantEff) / (r + 30);
+            if (s > bestScore) {
+              bestScore = s;
+              best = { x: tx, y: ty };
+              bestKind = 'tile';
+              bestState = STATE.GRAZE;
+            }
+          }
+        }
+
+        if (bestKind === 'here') {
+          this.state = STATE.EAT;
+          this.target = null;
+          return;
+        }
+        if (best) {
+          if (bestState === STATE.HUNT && this.state !== STATE.HUNT) this.chaseTime = 0;
+          this.setTarget(bestState, best, bestKind);
+          return;
+        }
+      }
+
+      // ---- 5. rest when full (saves energy), otherwise wander (with herding)
+      if (!hungry && !ready && sim.rng.chance(0.85)) {
+        this.state = STATE.REST;
+        this.target = null;
+        return;
+      }
+      this.state = STATE.WANDER;
+      this.target = null;
+      this.wanderTurn = sim.rng.float(-1.2, 1.2);
+      if (herdN > 0 && g.social > 0.05) {
+        const cohesion = Math.atan2(herdY, herdX);
+        const align = Math.atan2(herdHY, herdHX);
+        const want = Math.hypot(herdX / herdN, herdY / herdN) > 40 ? cohesion : align;
+        this.wanderTurn += angleDiff(this.heading, want) * g.social * 2;
+      }
+    }
+
+    setTarget(state, target, kind) {
+      this.state = state;
+      this.target = target;
+      this.targetKind = kind;
+    }
+
+    update(dt, sim) {
+      const world = sim.world;
+      this.age += dt;
+      if (this.reproCooldown > 0) this.reproCooldown -= dt;
+      if (this.huntCooldown > 0) this.huntCooldown -= dt;
+
+      // Growing up changes the body.
+      if (this.grow < 1) {
+        const ng = Math.min(1, this.age / this.g.maturity);
+        if (ng - this.grow > 0.04 || ng === 1) {
+          const hr = this.health / this.phen.maxHealth;
+          this.grow = ng;
+          this.phen = Evo.Genome.phenotype(this.g, this.grow);
+          this.health = hr * this.phen.maxHealth;
+        }
+      }
+
+      // Nobody to mate with for a while? Reproduce alone (budding).
+      if (this.isReadyToMate() && this.state !== STATE.MATE) {
+        this.mateSearch += dt;
+        if (sim.cfg.allowAsexual && this.mateSearch > 15) sim.reproduce(this, null);
+      }
+
+      this.thinkTimer -= dt;
+      if (this.thinkTimer <= 0) {
+        this.thinkTimer = 0.25 + sim.rng.float(0, 0.15);
+        this.think(sim);
+      }
+
+      this.act(dt, sim);
+      this.move(dt, world);
+
+      // Metabolism: resting cost (Kleiber-ish) + movement cost ~ v².
+      const p = this.phen;
+      const vr = this.v / 50;
+      this.energy -= (p.basal + p.moveCost * vr * vr) * dt;
+
+      if (this.energy <= 0) {
+        this.energy = 0;
+        this.health -= p.maxHealth * 0.12 * dt;
+        this.deathCause = 'starvation';
+      } else if (this.health < p.maxHealth) {
+        const heal = p.maxHealth * 0.03 * dt;
+        this.health = Math.min(p.maxHealth, this.health + heal);
+        this.energy -= heal * 0.3;
+      }
+      if (this.age > this.g.lifespan) {
+        this.health -= p.maxHealth * 0.06 * dt;
+        if (this.energy > 0) this.deathCause = 'old age';
+      }
+
+      // Stamina.
+      if (this.sprinting) {
+        this.stamina -= dt;
+        if (this.stamina <= 0) { this.stamina = 0; this.exhausted = true; }
+      } else {
+        this.stamina = Math.min(p.maxStamina, this.stamina + p.staminaRegen * dt);
+        if (this.exhausted && this.stamina > p.maxStamina * 0.5) this.exhausted = false;
+      }
+
+      if (this.health <= 0) sim.kill(this, this.deathCause || 'wounds');
+    }
+
+    // Turn intentions into a desired heading/speed and perform interactions.
+    act(dt, sim) {
+      const world = sim.world;
+      const p = this.phen;
+      const cruise = p.maxSpeed * 0.45;
+      let wantHeading = this.heading;
+      let wantSpeed = cruise;
+      let sprint = false;
+      const t = this.target;
+      const distTo = (o) => Math.hypot(world.dx(this.x, o.x), world.dy(this.y, o.y));
+      const headTo = (o) => Math.atan2(world.dy(this.y, o.y), world.dx(this.x, o.x));
+
+      switch (this.state) {
+        case STATE.FLEE:
+          wantHeading = Math.atan2(this.fleeY, this.fleeX);
+          sprint = true;
+          break;
+
+        case STATE.HUNT:
+        case STATE.FIGHT: {
+          if (!t || !t.alive || distTo(t) > p.senseRadius * 1.4 || (this.state === STATE.HUNT && this.chaseTime > 10)) {
+            if (this.state === STATE.HUNT) this.huntCooldown = 4;
+            this.state = STATE.WANDER;
+            this.target = null;
+            break;
+          }
+          this.chaseTime += dt;
+          const d = distTo(t);
+          // Lead the target a little.
+          const lead = Math.min(1, d / (p.maxSpeed + 1));
+          const px = t.x + Math.cos(t.heading) * t.v * lead;
+          const py = t.y + Math.sin(t.heading) * t.v * lead;
+          wantHeading = headTo({ x: px, y: py });
+          sprint = d < p.senseRadius * 0.8;
+          const reach = p.radius + t.phen.radius + 3;
+          if (d < reach) {
+            wantSpeed = t.v;
+            sprint = false;
+            this.attack(t, dt, sim);
+          }
+          break;
+        }
+
+        case STATE.SCAVENGE: {
+          if (!t || t.energy <= 0.5) { this.state = STATE.WANDER; this.target = null; break; }
+          const d = distTo(t);
+          wantHeading = headTo(t);
+          if (d < p.radius + 5) {
+            wantSpeed = 0;
+            const bite = Math.min(p.biteRate * 1.5 * dt, t.energy, (p.maxEnergy - this.energy) / Math.max(p.meatEff, 0.01));
+            t.energy -= bite;
+            this.energy += bite * p.meatEff;
+            if (this.energy >= p.maxEnergy * 0.98) this.state = STATE.WANDER;
+          }
+          break;
+        }
+
+        case STATE.EAT: {
+          wantSpeed = 0;
+          const i = world.tileIndex(this.x, this.y);
+          if (i < 0 || world.plant[i] < 0.5 || this.energy >= p.maxEnergy * 0.98) {
+            this.state = STATE.WANDER;
+            this.thinkTimer = 0;
+            break;
+          }
+          // Holling type II: sparse plants are slower to eat.
+          const dens = world.plant[i] / Evo.K.PLANT_MAX;
+          const bite = Math.min(p.biteRate * dt * (dens / (dens + 0.25)) * 1.25, world.plant[i]);
+          world.plant[i] -= bite;
+          this.energy = Math.min(p.maxEnergy, this.energy + bite * p.plantEff);
+          break;
+        }
+
+        case STATE.GRAZE: {
+          if (!t) { this.state = STATE.WANDER; break; }
+          wantHeading = headTo(t);
+          const i = world.tileIndex(this.x, this.y);
+          if (distTo(t) < Evo.K.TILE * 0.6 || (i >= 0 && world.plant[i] > 8 * p.plantEff + 4)) {
+            this.state = STATE.EAT;
+            this.target = null;
+          }
+          break;
+        }
+
+        case STATE.MATE: {
+          if (!t || !t.alive || !this.isReadyToMate() || !t.isReadyToMate()) { this.state = STATE.WANDER; this.target = null; break; }
+          wantHeading = headTo(t);
+          if (distTo(t) < p.radius + t.phen.radius + 4) {
+            sim.reproduce(this, t);
+            this.state = STATE.WANDER;
+            this.target = null;
+          }
+          break;
+        }
+
+        case STATE.REST:
+          wantSpeed = 0;
+          break;
+
+        default: // WANDER
+          wantHeading = this.heading + this.wanderTurn * dt * 2;
+          wantSpeed = cruise * 0.7;
+      }
+
+      this.sprinting = sprint && !this.exhausted && this.stamina > 0;
+      if (this.sprinting) wantSpeed = p.maxSpeed;
+      this.wantHeading = wantHeading;
+      this.wantSpeed = wantSpeed;
+    }
+
+    attack(t, dt, sim) {
+      const dmg = this.phen.strength * dt * (1 - 0.6 * t.g.armor);
+      t.health -= dmg;
+      t.lastAttacker = this;
+      t.lastAttackedAt = sim.time;
+      if (t.health <= 0 && t.alive) {
+        t.deathCause = this.state === STATE.HUNT ? 'eaten' : 'fight';
+        this.kills++;
+        sim.kill(t, t.deathCause);
+        this.state = STATE.WANDER;
+        this.target = null;
+        this.thinkTimer = 0; // go eat the corpse right away
+      }
+    }
+
+    move(dt, world) {
+      const p = this.phen;
+      const turn = Evo.clamp(angleDiff(this.heading, this.wantHeading), -p.turnRate * dt, p.turnRate * dt);
+      this.heading += turn;
+      const accel = p.maxSpeed * 2 * dt;
+      this.v += Evo.clamp(this.wantSpeed - this.v, -accel * 2, accel);
+      if (this.v < 0.01) { this.v = 0; return; }
+      const biome = world.biomeAt(this.x, this.y);
+      const step = this.v * Math.max(0.3, biome.speed) * dt;
+      const nx = this.x + Math.cos(this.heading) * step;
+      const ny = this.y + Math.sin(this.heading) * step;
+      const outOfBounds = !world.wrap && (nx < 0 || ny < 0 || nx >= world.width || ny >= world.height);
+      if (outOfBounds || !world.passable(nx, ny)) {
+        // Bump into water/wall: turn away.
+        this.heading += Math.PI * (0.5 + Math.random() * 0.5) * (Math.random() < 0.5 ? -1 : 1);
+        this.v *= 0.3;
+        if (this.state === STATE.GRAZE) this.state = STATE.WANDER;
+        return;
+      }
+      this.x = nx;
+      this.y = ny;
+      world.wrapPos(this);
+    }
+  }
+
+  Creature.STATE = STATE;
+  Evo.Creature = Creature;
+})((globalThis.Evo = globalThis.Evo || {}));
