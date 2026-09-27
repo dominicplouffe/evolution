@@ -22,7 +22,7 @@ No build step and no dependencies. Either:
 | Inspect a creature | Inspect tool (<kbd>I</kbd>), click it. <kbd>F</kbd> follows it, <kbd>Esc</kbd> deselects |
 | Drop creatures | Herbivore (<kbd>H</kbd>) / Carnivore (<kbd>C</kbd>) tool, click the map |
 | Grow food / smite | <kbd>G</kbd> / <kbd>X</kbd>, click or drag |
-| Fit whole map | <kbd>Home</kbd> |
+| Fit whole map | <kbd>0</kbd> (or <kbd>Home</kbd>), or the **Fit map** button |
 
 The side panel shows live stats, a history chart (population by diet, or the
 average of any gene over time), the selected creature's DNA, the list of living
@@ -80,6 +80,7 @@ starting populations, plant growth, mutation rate, seasons and more.
 
 ```
 index.html          page layout
+js/version.js       version label shown in the corner (bump on every change)
 css/style.css       styles
 js/rng.js           seeded RNG + seamless noise
 js/config.js        world settings + simulation constants (tuning knobs)
