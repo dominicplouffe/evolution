@@ -75,7 +75,9 @@ starting populations, plant growth, mutation rate, seasons and more.
   food › home › rest/wander); babies inherit whole neurons from either parent,
   and mutations make behaviour drift. The inspector shows each creature's
   scores. **World settings → Evolving brains** turns it off (everyone uses the
-  founder rules) for comparison. Sprinting burns stamina; exhausted creatures
+  founder rules) for comparison, and **Brain mutation ×** sets how fast brains
+  change (1 = default; higher = faster, more surprising behaviour but more
+  badly-wired babies; 0 = brains no longer mutate). Sprinting burns stamina; exhausted creatures
   can't sprint.
 - **Diet** is a trade-off: digesting meat well means digesting plants badly.
   Predators hunt prey they think they can take; dead creatures leave carcasses

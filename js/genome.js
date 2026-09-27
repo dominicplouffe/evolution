@@ -40,7 +40,9 @@
     return out;
   }
 
-  function mutate(g, rng, scale) {
+  // `brainScale` multiplies how often brain weights mutate (the Brain mutation
+  // setting); body genes only use `scale`.
+  function mutate(g, rng, scale, brainScale = 1) {
     const out = cloneGenome(g);
     const p = clamp(g.mutation * scale, 0, 1);
     for (const gene of GENES) {
@@ -51,7 +53,7 @@
         out[gene.key] = clamp(out[gene.key] + rng.gauss() * span * step, gene.min, gene.max);
       }
     }
-    out.brain = Evo.Brain.mutate(g.brain || Evo.Brain.DEFAULT, rng, p);
+    out.brain = Evo.Brain.mutate(g.brain || Evo.Brain.DEFAULT, rng, p * brainScale);
     return out;
   }
 

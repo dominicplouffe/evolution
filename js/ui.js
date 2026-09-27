@@ -383,7 +383,7 @@
       form.onchange = () => {
         this.readSettings();
         // Some settings can change on the fly.
-        for (const k of ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration', 'neuralBrains']) {
+        for (const k of ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration', 'neuralBrains', 'brainMutation']) {
           this.sim.cfg[k] = this.cfg[k];
         }
       };

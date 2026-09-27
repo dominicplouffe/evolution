@@ -103,7 +103,7 @@
       let founded = null; // a new species founded by a littermate
       for (let i = 0; i < litter; i++) {
         let genome = father ? Evo.Genome.crossover(mother.g, father.g, this.rng) : Evo.Genome.clone(mother.g);
-        genome = Evo.Genome.mutate(genome, this.rng, this.cfg.mutationScale);
+        genome = Evo.Genome.mutate(genome, this.rng, this.cfg.mutationScale, this.cfg.brainMutation);
         const sp = this.species.assign(genome, mother.species, this.time, founded);
         if (sp.id !== mother.species && sp.count === 0) {
           founded = sp;
