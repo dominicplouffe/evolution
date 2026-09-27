@@ -3,6 +3,15 @@
 (function (Evo) {
   'use strict';
 
+  // Bright on the map so they stand out against grass and water.
+  const NICHE_COLORS = {
+    grazer: 'hsl(55, 90%, 60%)',
+    browser: 'hsl(25, 90%, 58%)',
+    swimmer: 'hsl(190, 95%, 62%)',
+    omnivore: 'hsl(285, 70%, 65%)',
+    carnivore: 'hsl(350, 85%, 55%)',
+  };
+
   class Renderer {
     constructor(canvas) {
       this.canvas = canvas;
@@ -85,10 +94,11 @@
       const d = this.image.data;
       const B = Evo.BIOMES;
       const winter = Evo.clamp((1 - w.season(this.sim.time)) * 0.8, 0, 0.5);
-      for (let i = 0; i < w.plant.length; i++) {
+      const F = w.food;
+      for (let i = 0; i < w.biome.length; i++) {
         const b = B[w.biome[i]];
-        const max = w.plantMax[i];
-        let t = max > 0 ? w.plant[i] / max : 0;
+        const max = F.grass.max[i] + F.leaves.max[i] + F.algae.max[i];
+        let t = max > 0 ? (F.grass.amt[i] + F.leaves.amt[i] + F.algae.amt[i]) / max : 0;
         t *= 1 - winter * 0.6;
         const o = i * 4;
         d[o] = b.color[0] + (b.lush[0] - b.color[0]) * t;
@@ -100,6 +110,7 @@
     }
 
     creatureColor(c) {
+      if (this.colorMode === 'niche') return NICHE_COLORS[Evo.niche(c.g)];
       if (this.colorMode === 'diet') {
         // green (plants) -> yellow -> red (meat)
         const d = c.g.diet;
@@ -243,4 +254,5 @@
   }
 
   Evo.Renderer = Renderer;
+  Evo.NICHE_COLORS = NICHE_COLORS;
 })((globalThis.Evo = globalThis.Evo || {}));

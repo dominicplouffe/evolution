@@ -58,6 +58,8 @@
       this.lastAttackedAt = -99;
       this.thinkTimer = sim.rng.float(0, 0.3);
       this.wanderTurn = 0;
+      this.herdSize = 0;
+      this.chasedBy = null;
       this.sprinting = false;
       this.deathCause = null;
       this.bornAt = sim.time;
@@ -72,9 +74,13 @@
       return this.grow >= 1 && this.reproCooldown <= 0 && this.energy >= 0.75 * this.phen.maxEnergy && this.age < this.g.lifespan;
     }
 
+    // Mates must be genetically close AND look alike (similar color). Once two
+    // groups drift apart they stop interbreeding, so new species stay separate.
     canMateWith(o) {
-      return o !== this && o.alive && o.isReadyToMate() &&
-        (o.species === this.species || Evo.Genome.distance(this.g, o.g) < Evo.K.MATE_THRESHOLD);
+      if (o === this || !o.alive || !o.isReadyToMate()) return false;
+      let hue = Math.abs(this.g.hue - o.g.hue);
+      if (hue > 180) hue = 360 - hue;
+      return hue < Evo.K.MATE_HUE && Evo.Genome.distance(this.g, o.g) < Evo.K.MATE_THRESHOLD;
     }
 
     // Does `o` look like a danger to me?
@@ -99,7 +105,8 @@
       let mate = null, mateD = Infinity;
       let prey = null, preyScore = 0;
       let herdX = 0, herdY = 0, herdHX = 0, herdHY = 0, herdN = 0;
-      const fleeDist = sense * (0.2 + 0.8 * g.fear);
+      // "Many eyes": a creature in a herd spots danger earlier.
+      const fleeDist = sense * (0.2 + 0.8 * g.fear) * (1 + 0.1 * Math.min(this.herdSize, 6) * g.social);
       const hungry = this.energy < 0.85 * p.maxEnergy;
       const canHunt = g.diet >= Evo.K.PREDATOR_DIET && this.grow > 0.7 && this.huntCooldown <= 0 && hungry;
       const ready = this.isReadyToMate();
@@ -122,7 +129,10 @@
           herdN++;
         }
         if (ready && d < mateD && this.canMateWith(o)) { mate = o; mateD = d; }
-        if (canHunt && o.species !== this.species) {
+        // Don't chase prey another predator is already chasing.
+        const rival = o.chasedBy;
+        const taken = rival && rival !== this && rival.alive && rival.target === o && rival.state === STATE.HUNT;
+        if (canHunt && o.species !== this.species && !taken) {
           const bravery = 0.8 + 1.5 * g.aggression;
           if (o.phen.mass < p.mass * bravery && o.health < p.strength * 12 * (0.5 + g.aggression)) {
             const s = (o.phen.mass * Evo.K.MEAT_PER_MASS * p.meatEff) / (d + 30);
@@ -130,6 +140,8 @@
           }
         }
       });
+
+      this.herdSize = herdN;
 
       // ---- 1. flee
       if (threats > 0 && (fx !== 0 || fy !== 0)) {
@@ -163,6 +175,11 @@
       }
 
       // ---- 4. food
+      // Keep walking to the chosen patch instead of re-deciding every think.
+      if (hungry && this.state === STATE.GRAZE && this.target) {
+        const ti = world.tileIndex(this.target.x, this.target.y);
+        if (ti >= 0 && world.foodValue(ti, p.eat) > 1) return;
+      }
       if (hungry) {
         let best = null, bestScore = 0, bestKind = null, bestState = null;
         if (prey) { best = prey; bestScore = preyScore * 0.8; bestKind = 'creature'; bestState = STATE.HUNT; }
@@ -176,18 +193,30 @@
 
         if (p.plantEff > 0.1) {
           const here = world.tileIndex(this.x, this.y);
-          if (here >= 0 && world.plant[here] > 2) {
-            const s = (world.plant[here] * p.plantEff) / 20;
+          const hereValue = here >= 0 ? this.patchValue(world) : 0;
+          if (hereValue > 1.5) {
+            const s = hereValue / 20;
             if (s > bestScore) { bestScore = s; best = null; bestKind = 'here'; bestState = STATE.EAT; }
           }
-          // Sample a handful of tiles in view instead of scanning all of them.
-          for (let i = 0; i < 10; i++) {
-            const a = sim.rng.float(0, Math.PI * 2);
-            const r = sense * Math.sqrt(sim.rng.next());
-            const tx = this.x + Math.cos(a) * r, ty = this.y + Math.sin(a) * r;
+          // Check the 8 neighbouring tiles, then sample a handful of tiles in
+          // view (scanning all of them would be too slow).
+          const T = Evo.K.TILE;
+          for (let i = 0; i < 18; i++) {
+            let tx, ty, r;
+            if (i < 8) {
+              const a = (i / 8) * Math.PI * 2;
+              r = T;
+              tx = this.x + Math.cos(a) * T;
+              ty = this.y + Math.sin(a) * T;
+            } else {
+              const a = sim.rng.float(0, Math.PI * 2);
+              r = sense * Math.sqrt(sim.rng.next());
+              tx = this.x + Math.cos(a) * r;
+              ty = this.y + Math.sin(a) * r;
+            }
             const ti = world.tileIndex(tx, ty);
-            if (ti < 0) continue;
-            const s = (world.plant[ti] * p.plantEff) / (r + 30);
+            if (ti < 0 || !world.canEnter(tx, ty, g.swim)) continue;
+            const s = world.foodValue(ti, p.eat) / (r + 15);
             if (s > bestScore) {
               bestScore = s;
               best = { x: tx, y: ty };
@@ -203,7 +232,10 @@
           return;
         }
         if (best) {
-          if (bestState === STATE.HUNT && this.state !== STATE.HUNT) this.chaseTime = 0;
+          if (bestState === STATE.HUNT) {
+            if (this.state !== STATE.HUNT) this.chaseTime = 0;
+            best.chasedBy = this;
+          }
           this.setTarget(bestState, best, bestKind);
           return;
         }
@@ -224,6 +256,31 @@
         const want = Math.hypot(herdX / herdN, herdY / herdN) > 40 ? cohesion : align;
         this.wanderTurn += angleDiff(this.heading, want) * g.social * 2;
       }
+    }
+
+    // The tiles I can feed from without moving: my own tile, plus (for big
+    // bodies) the neighbouring ones. Returns [tileIndex, weight] pairs.
+    patchTiles(world) {
+      const here = world.tileIndex(this.x, this.y);
+      const out = here >= 0 ? [[here, 1]] : [];
+      const w = this.phen.footprint;
+      if (w > 0) {
+        const T = Evo.K.TILE;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const ti = world.tileIndex(this.x + dx * T, this.y + dy * T);
+            if (ti >= 0 && ti !== here) out.push([ti, w * (dx && dy ? 0.7 : 1)]);
+          }
+        }
+      }
+      return out;
+    }
+
+    patchValue(world) {
+      let v = 0;
+      for (const [ti, w] of this.patchTiles(world)) v += w * world.foodValue(ti, this.phen.eat);
+      return v;
     }
 
     setTarget(state, target, kind) {
@@ -354,17 +411,30 @@
 
         case STATE.EAT: {
           wantSpeed = 0;
-          const i = world.tileIndex(this.x, this.y);
-          if (i < 0 || world.plant[i] < 0.5 || this.energy >= p.maxEnergy * 0.98) {
+          const patch = this.patchTiles(world);
+          let value = 0;
+          for (const [ti, w] of patch) value += w * world.foodValue(ti, p.eat);
+          if (value < 0.4 || this.energy >= p.maxEnergy * 0.98) {
             this.state = STATE.WANDER;
             this.thinkTimer = 0;
             break;
           }
-          // Holling type II: sparse plants are slower to eat.
-          const dens = world.plant[i] / Evo.K.PLANT_MAX;
-          const bite = Math.min(p.biteRate * dt * (dens / (dens + 0.25)) * 1.25, world.plant[i]);
-          world.plant[i] -= bite;
-          this.energy = Math.min(p.maxEnergy, this.energy + bite * p.plantEff);
+          // Holling type II: sparse food is slower to eat. The gain is split
+          // across food types in proportion to what each one is worth to me.
+          const dens = value / Evo.K.PLANT_MAX;
+          const gain = p.biteRate * dt * (dens / (dens + 0.25)) * 1.25;
+          let got = 0;
+          for (const [ti, w] of patch) {
+            for (const f of Evo.FOODS) {
+              const eff = p.eat[f.key];
+              const layer = world.food[f.key];
+              if (eff <= 0.01 || layer.amt[ti] <= 0) continue;
+              const eaten = Math.min(layer.amt[ti], (gain * w * layer.amt[ti] * eff) / value / eff);
+              layer.amt[ti] -= eaten;
+              got += eaten * eff;
+            }
+          }
+          this.energy = Math.min(p.maxEnergy, this.energy + got);
           break;
         }
 
@@ -372,7 +442,7 @@
           if (!t) { this.state = STATE.WANDER; break; }
           wantHeading = headTo(t);
           const i = world.tileIndex(this.x, this.y);
-          if (distTo(t) < Evo.K.TILE * 0.6 || (i >= 0 && world.plant[i] > 8 * p.plantEff + 4)) {
+          if (distTo(t) < Evo.K.TILE * 0.6 || (i >= 0 && world.foodValue(i, p.eat) > Evo.K.PLANT_MAX * 0.7)) {
             this.state = STATE.EAT;
             this.target = null;
           }
@@ -428,11 +498,10 @@
       this.v += Evo.clamp(this.wantSpeed - this.v, -accel * 2, accel);
       if (this.v < 0.01) { this.v = 0; return; }
       const biome = world.biomeAt(this.x, this.y);
-      const step = this.v * Math.max(0.3, biome.speed) * dt;
+      const step = this.v * Math.max(0.15, world.speedFactor(biome, this.g.swim)) * dt;
       const nx = this.x + Math.cos(this.heading) * step;
       const ny = this.y + Math.sin(this.heading) * step;
-      const outOfBounds = !world.wrap && (nx < 0 || ny < 0 || nx >= world.width || ny >= world.height);
-      if (outOfBounds || !world.passable(nx, ny)) {
+      if (!world.canEnter(nx, ny, this.g.swim)) {
         // Bump into water/wall: turn away.
         this.heading += Math.PI * (0.5 + Math.random() * 0.5) * (Math.random() < 0.5 ? -1 : 1);
         this.v *= 0.3;
