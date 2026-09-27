@@ -34,7 +34,8 @@
       this.heading = sim.rng.float(0, Math.PI * 2);
       this.v = 0;
       this.age = 0;
-      this.grow = opts.adult ? 1 : 0;
+      this.growStart = opts.adult ? 1 : Evo.Genome.birthGrowth(genome);
+      this.grow = opts.adult ? 1 : this.growStart;
       this.phen = Evo.Genome.phenotype(genome, this.grow);
       this.health = this.phen.maxHealth;
       this.energy = opts.energy !== undefined ? Math.min(opts.energy, this.phen.maxEnergy) : this.phen.maxEnergy * 0.7;
@@ -97,7 +98,7 @@
     // How far away can I spot `o`? Camouflage works best under cover.
     detectRange(o, world) {
       const cover = world.biomeAt(o.x, o.y).cover;
-      return this.phen.senseRadius * (1 - o.g.camo * (0.3 + 0.5 * cover));
+      return this.phen.senseRadius * (1 - o.g.camo * (0.3 + 0.5 * cover)) * o.phen.visibility;
     }
 
     think(sim) {
@@ -378,7 +379,7 @@
 
       // Growing up changes the body.
       if (this.grow < 1) {
-        const ng = Math.min(1, this.age / this.g.maturity);
+        const ng = Math.min(1, this.growStart + (1 - this.growStart) * (this.age / this.g.maturity));
         if (ng - this.grow > 0.04 || ng === 1) {
           const hr = this.health / this.phen.maxHealth;
           this.grow = ng;
@@ -428,7 +429,7 @@
 
       // Stamina.
       if (this.sprinting) {
-        this.stamina -= dt;
+        this.stamina -= this.phen.sprintDrain * dt;
         if (this.stamina <= 0) { this.stamina = 0; this.exhausted = true; }
       } else {
         this.stamina = Math.min(p.maxStamina, this.stamina + p.staminaRegen * dt);
@@ -567,6 +568,9 @@
       t.health -= dmg;
       t.lastAttacker = this;
       t.lastAttackedAt = sim.time;
+      // Prey struggles: attacking costs the attacker some injuries too.
+      this.health -= t.phen.strength * 0.35 * dt * (1 - 0.6 * this.g.armor);
+      if (this.health <= 0) this.deathCause = 'injured hunting';
       if (t.health <= 0 && t.alive) {
         t.deathCause = this.state === STATE.HUNT ? 'eaten' : 'fight';
         this.kills++;
@@ -581,7 +585,7 @@
       const p = this.phen;
       const turn = Evo.clamp(angleDiff(this.heading, this.wantHeading), -p.turnRate * dt, p.turnRate * dt);
       this.heading += turn;
-      const accel = p.maxSpeed * 2 * dt;
+      const accel = p.maxSpeed * p.accel * dt;
       this.v += Evo.clamp(this.wantSpeed - this.v, -accel * 2, accel);
       if (this.v < 0.01) { this.v = 0; return; }
       const biome = world.biomeAt(this.x, this.y);

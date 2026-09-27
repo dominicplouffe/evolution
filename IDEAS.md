@@ -19,6 +19,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - Seasons, carcasses that rot, camouflage that works best in forests
 - God tools: drop creatures, grow food, smite, clone a creature
 - Save/load: autosave to the browser, continue on reload, export/import as a file
+- Counterweights between genes: speed peaks at medium size, heavy bodies accelerate slowly, small bodies hide better, sprinters tire, prey fight back, long life costs upkeep, slow growth gives stronger young
 
 ## Next: small additions
 

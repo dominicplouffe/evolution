@@ -4,22 +4,22 @@
   'use strict';
 
   const GENES = [
-    { key: 'size', label: 'Size', min: 0.5, max: 3, weight: 3, desc: 'Body size. Mass grows with size³: more health, strength and fat storage, but slower and hungrier.' },
-    { key: 'speed', label: 'Muscle', min: 0.2, max: 3, desc: 'Top speed. Costs upkeep energy.' },
+    { key: 'size', label: 'Size', min: 0.5, max: 3, weight: 3, desc: 'Body size. Mass grows with size³: more health, strength and fat storage, but hungrier and slower to accelerate. Top speed peaks at medium size; small bodies are harder to spot.' },
+    { key: 'speed', label: 'Muscle', min: 0.2, max: 3, desc: 'Top speed. Costs upkeep, and fast-twitch muscle tires sooner when sprinting.' },
     { key: 'stamina', label: 'Stamina', min: 0.2, max: 3, desc: 'How long it can sprint, and how fast it recovers.' },
     { key: 'sense', label: 'Senses', min: 0.3, max: 3, desc: 'Vision/smell range. Big brains are expensive.' },
     { key: 'diet', label: 'Diet', min: 0, max: 1, weight: 3, desc: '0 = herbivore, 1 = carnivore. Digestion is a trade-off: good at one means bad at the other.' },
     { key: 'feeding', label: 'Browsing', min: 0, max: 1, weight: 3, desc: '0 = grazes low grass, 1 = browses tree leaves. Leaves are only reachable with a big body.' },
     { key: 'swim', label: 'Swimming', min: 0, max: 1, weight: 3, desc: 'Fast in water, eats water plants, crosses deep water above 0.5. Clumsy on land and costs upkeep.' },
     { key: 'appetite', label: 'Appetite', min: 0.2, max: 0.95, desc: 'Energy level (fraction of its reserves) below which it gets hungry and looks for food.' },
-    { key: 'aggression', label: 'Aggression', min: 0, max: 1, desc: 'Willingness to attack bigger prey and to fight back.' },
+    { key: 'aggression', label: 'Aggression', min: 0, max: 1, desc: 'Willingness to attack bigger prey and to fight back. Struggling prey injure their attacker.' },
     { key: 'fear', label: 'Fear', min: 0, max: 1, desc: 'How early it runs away from predators.' },
     { key: 'armor', label: 'Armor', min: 0, max: 1, desc: 'Shell/hide. Reduces damage taken, but is heavy (slower) and costly.' },
     { key: 'camo', label: 'Camouflage', min: 0, max: 1, desc: 'Harder to spot, especially in forests. Small upkeep cost.' },
     { key: 'social', label: 'Herding', min: 0, max: 1, desc: 'Tendency to stay with its own species.' },
     { key: 'litter', label: 'Litter size', min: 1, max: 6, desc: 'Babies per birth. Many small babies vs few well-fed ones.' },
-    { key: 'maturity', label: 'Maturity (s)', min: 6, max: 60, desc: 'Time to grow up before it can breed.' },
-    { key: 'lifespan', label: 'Lifespan (s)', min: 60, max: 400, desc: 'Age at which it starts dying of old age.' },
+    { key: 'maturity', label: 'Maturity (s)', min: 6, max: 60, desc: 'Time to grow up before it can breed. Slow growers have better-developed babies and sturdier adults.' },
+    { key: 'lifespan', label: 'Lifespan (s)', min: 60, max: 400, desc: 'Age at which it starts dying of old age. A body built to last costs more upkeep (repair).' },
     { key: 'mutation', label: 'Mutation rate', min: 0.01, max: 0.4, desc: 'Chance each gene mutates in its offspring. Evolvable!' },
     { key: 'hue', label: 'Color', min: 0, max: 360, neutral: true, desc: 'Neutral marker gene that drifts over time: related creatures look alike.' },
   ];
@@ -92,12 +92,26 @@
   // Turn DNA into body stats. `grow` goes 0 -> 1 from birth to adulthood.
   // Scaling laws are loosely inspired by biology: metabolism ~ mass^0.75
   // (Kleiber's law), strength ~ muscle cross-section ~ mass^0.67.
+  function speedCurve(M) {
+    return Math.pow(M, 0.26) * (1 - Math.exp(-1.2 * Math.pow(M, -0.6)));
+  }
+
+  // How developed a baby is at birth (0..0.35): slow-maturing species have
+  // fewer, better-developed young.
+  function birthGrowth(g) {
+    return 0.35 * clamp((g.maturity - 6) / 54, 0, 1);
+  }
+
   function phenotype(g, grow) {
     const s = g.size * (0.4 + 0.6 * grow);
     const mass = s * s * s;
     const adultMass = g.size * g.size * g.size;
     const armorSlow = 1 - 0.35 * g.armor;
-    const upkeep = 0.5 + 0.17 * g.speed + 0.1 * g.stamina + 0.15 * g.sense + 0.3 * g.armor + 0.12 * g.camo + 0.15 * g.swim;
+    // Long life isn't free: a body built to last spends more on repair.
+    const repair = 0.2 * clamp((g.lifespan - 60) / 340, 0, 1);
+    const upkeep = 0.5 + 0.17 * g.speed + 0.1 * g.stamina + 0.15 * g.sense + 0.3 * g.armor + 0.12 * g.camo + 0.15 * g.swim + repair;
+    // Slow-maturing species grow into sturdier adults.
+    const matFrac = clamp((g.maturity - 6) / 54, 0, 1);
     const plantEff = Math.pow(1 - g.diet, 1.4);
     // Reaching tree leaves needs height; small mouths crop short grass best.
     // Young browsers get a head start (think of parents bending branches down),
@@ -108,12 +122,20 @@
       s,
       mass,
       radius: 2 + 4 * s,
-      maxHealth: 30 * Math.pow(mass, 0.8) * (1 + g.armor),
+      maxHealth: 30 * Math.pow(mass, 0.8) * (1 + g.armor) * (1 + 0.3 * matFrac),
       strength: 11 * Math.pow(mass, 0.67) * (0.25 + 0.75 * g.diet) * (0.6 + 0.6 * g.aggression),
-      maxSpeed: (55 * Math.sqrt(g.speed) * armorSlow) / Math.pow(s, 0.3),
+      // Top speed peaks at medium size (Hirt et al. 2017): short legs limit
+      // small bodies, and heavy ones can't reach their potential.
+      maxSpeed: (55 * Math.sqrt(g.speed) * armorSlow * speedCurve(mass)) / speedCurve(1),
+      // Heavy bodies take longer to get up to speed.
+      accel: 2 / Math.pow(mass, 0.25),
       turnRate: 5 / Math.sqrt(s),
       maxStamina: 2 + 5 * g.stamina,
       staminaRegen: 0.3 + 0.5 * g.stamina,
+      // Fast-twitch muscle burns out quickly: sprinters tire sooner.
+      sprintDrain: 0.6 + 0.4 * g.speed,
+      // Small bodies are harder to spot.
+      visibility: 0.75 + 0.25 * clamp(s, 0, 1),
       senseRadius: 40 + 75 * g.sense + 8 * s,
       // Energy storage scales gently with growth so babies aren't starving at birth.
       maxEnergy: 100 * adultMass * (0.3 + 0.7 * grow),
@@ -133,7 +155,8 @@
       eat: {
         // A water-adapted body is poor at digesting land plants.
         grass: plantEff * (1 - 0.8 * g.feeding) * grassMouth * (1 - 0.6 * g.swim),
-        leaves: plantEff * (0.1 + 0.9 * g.feeding) * reach * (1 - 0.6 * g.swim),
+        // Tough, fibrous leaves need a specialised gut: steep in Browsing.
+        leaves: plantEff * (0.05 + 0.95 * Math.pow(g.feeding, 1.5)) * reach * (1 - 0.6 * g.swim),
         algae: plantEff * (0.05 + 0.95 * g.swim),
       },
       meatEff: Math.pow(g.diet, 1.1),
@@ -202,6 +225,6 @@
   Evo.niche = niche;
   Evo.GENE_BY_KEY = GENE_BY_KEY;
   Evo.clamp = clamp;
-  Evo.Genome = { make: makeGenome, clone: cloneGenome, mutate, crossover, distance, phenotype };
+  Evo.Genome = { make: makeGenome, clone: cloneGenome, mutate, crossover, distance, phenotype, birthGrowth };
   Evo.SpeciesRegistry = SpeciesRegistry;
 })((globalThis.Evo = globalThis.Evo || {}));

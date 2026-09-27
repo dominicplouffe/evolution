@@ -13,7 +13,7 @@
   const CREATURE_FIELDS = [
     'id', 'x', 'y', 'heading', 'v', 'age', 'grow', 'health', 'energy', 'stamina', 'stomach', 'stomachCal',
     'hungry', 'exhausted', 'species', 'generation', 'parentIds', 'children', 'kills', 'reproCooldown',
-    'mateSearch', 'huntCooldown', 'bornAt', 'herdSize',
+    'mateSearch', 'huntCooldown', 'bornAt', 'herdSize', 'growStart',
   ];
   const KEEP_STATES = new Set(['Wandering', 'Resting', 'Digesting', 'Eating']);
 
@@ -130,6 +130,7 @@
     sim.creatures = d.creatures.map((o) => {
       const c = new Evo.Creature(sim, Evo.Genome.make(o.g), o.x, o.y, { species: o.species, adult: true });
       for (const k of CREATURE_FIELDS) if (o[k] !== undefined) c[k] = o[k];
+      if (o.growStart === undefined) c.growStart = o.grow >= 1 ? 1 : 0; // saves from before v0.6
       c.phen = Evo.Genome.phenotype(c.g, c.grow);
       c.state = o.state || 'Wandering';
       c.thinkTimer = 0;

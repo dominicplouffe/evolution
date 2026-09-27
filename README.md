@@ -56,8 +56,14 @@ starting populations, plant growth, mutation rate, seasons and more.
   predators gorge on a kill and then rest for a long time while plant-eaters
   graze most of the day.
 - **Body from DNA**: mass = size³. Bigger means more health, strength and fat
-  storage, but slower and hungrier. Resting cost scales with mass^0.75 (Kleiber's
-  law), movement costs mass × speed². Every "good" gene has an upkeep cost.
+  storage, but hungrier. Resting cost scales with mass^0.75 (Kleiber's law),
+  movement costs mass × speed². Every "good" gene has an upkeep cost.
+- **Trade-offs between genes**: top speed peaks at medium size (Hirt et al. 2017)
+  and heavy bodies accelerate slowly; small bodies are harder to spot; more
+  Muscle drains stamina faster when sprinting; struggling prey injure their
+  attacker; a longer Lifespan costs upkeep; a longer Maturity gives
+  better-developed babies and sturdier adults. Tree leaves need a specialised
+  (high Browsing) gut.
 - **Brain** (`js/creature.js`): a priority list — flee predators › fight back ›
   court a mate › eat (graze / scavenge / hunt) › rest or wander with the herd.
   Sprinting burns stamina; exhausted creatures can't sprint.
