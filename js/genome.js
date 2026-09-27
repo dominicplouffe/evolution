@@ -4,11 +4,13 @@
   'use strict';
 
   const GENES = [
-    { key: 'size', label: 'Size', min: 0.5, max: 3, desc: 'Body size. Mass grows with size³: more health, strength and fat storage, but slower and hungrier.' },
+    { key: 'size', label: 'Size', min: 0.5, max: 3, weight: 3, desc: 'Body size. Mass grows with size³: more health, strength and fat storage, but slower and hungrier.' },
     { key: 'speed', label: 'Muscle', min: 0.2, max: 3, desc: 'Top speed. Costs upkeep energy.' },
     { key: 'stamina', label: 'Stamina', min: 0.2, max: 3, desc: 'How long it can sprint, and how fast it recovers.' },
     { key: 'sense', label: 'Senses', min: 0.3, max: 3, desc: 'Vision/smell range. Big brains are expensive.' },
-    { key: 'diet', label: 'Diet', min: 0, max: 1, desc: '0 = herbivore, 1 = carnivore. Digestion is a trade-off: good at one means bad at the other.' },
+    { key: 'diet', label: 'Diet', min: 0, max: 1, weight: 3, desc: '0 = herbivore, 1 = carnivore. Digestion is a trade-off: good at one means bad at the other.' },
+    { key: 'feeding', label: 'Browsing', min: 0, max: 1, weight: 3, desc: '0 = grazes low grass, 1 = browses tree leaves. Leaves are only reachable with a big body.' },
+    { key: 'swim', label: 'Swimming', min: 0, max: 1, weight: 3, desc: 'Fast in water, eats water plants, crosses deep water above 0.5. Clumsy on land and costs upkeep.' },
     { key: 'aggression', label: 'Aggression', min: 0, max: 1, desc: 'Willingness to attack bigger prey and to fight back.' },
     { key: 'fear', label: 'Fear', min: 0, max: 1, desc: 'How early it runs away from predators.' },
     { key: 'armor', label: 'Armor', min: 0, max: 1, desc: 'Shell/hide. Reduces damage taken, but is heavy (slower) and costly.' },
@@ -71,15 +73,19 @@
     return out;
   }
 
-  // Mean normalized difference over non-neutral genes (0 = identical, 1 = opposite).
+  // Weighted root-mean-square difference over non-neutral genes
+  // (0 = identical, 1 = opposite). Genes that decide how a creature makes a
+  // living weigh more, so a change of niche is enough to split a species.
   function distance(a, b) {
     let sum = 0, n = 0;
     for (const gene of GENES) {
       if (gene.neutral) continue;
-      sum += Math.abs(a[gene.key] - b[gene.key]) / (gene.max - gene.min);
-      n++;
+      const w = gene.weight || 1;
+      const d = (a[gene.key] - b[gene.key]) / (gene.max - gene.min);
+      sum += w * d * d;
+      n += w;
     }
-    return sum / n;
+    return Math.sqrt(sum / n);
   }
 
   // Turn DNA into body stats. `grow` goes 0 -> 1 from birth to adulthood.
@@ -90,7 +96,13 @@
     const mass = s * s * s;
     const adultMass = g.size * g.size * g.size;
     const armorSlow = 1 - 0.35 * g.armor;
-    const upkeep = 0.5 + 0.17 * g.speed + 0.1 * g.stamina + 0.15 * g.sense + 0.3 * g.armor + 0.12 * g.camo;
+    const upkeep = 0.5 + 0.17 * g.speed + 0.1 * g.stamina + 0.15 * g.sense + 0.3 * g.armor + 0.12 * g.camo + 0.15 * g.swim;
+    const plantEff = Math.pow(1 - g.diet, 1.4);
+    // Reaching tree leaves needs height; small mouths crop short grass best.
+    // Young browsers get a head start (think of parents bending branches down),
+    // otherwise their calves would starve in the forest.
+    const reach = clamp((g.size * (0.75 + 0.25 * grow) - 0.45) / 0.8, 0, 1);
+    const grassMouth = 1.1 - 0.25 * clamp((s - 0.5) / 2.5, 0, 1);
     return {
       s,
       mass,
@@ -108,7 +120,15 @@
       basal: 0.9 * (Math.pow(mass, 0.75) + 0.35) * upkeep,
       moveCost: 0.55 * mass,
       biteRate: 11 * Math.pow(mass, 0.7),
-      plantEff: Math.pow(1 - g.diet, 1.4),
+      plantEff,
+      // How much of the 8 surrounding tiles a big body can feed from in place.
+      footprint: clamp((s - 0.8) / 1.0, 0, 1),
+      // Digestive efficiency per plant food: specializing in one costs the others.
+      eat: {
+        grass: plantEff * (1 - 0.8 * g.feeding) * grassMouth,
+        leaves: plantEff * (0.1 + 0.9 * g.feeding) * reach,
+        algae: plantEff * (0.05 + 0.95 * g.swim),
+      },
       meatEff: Math.pow(g.diet, 1.1),
     };
   }
@@ -144,22 +164,35 @@
         extinctAt: null,
         avgDiet: genome.diet,
         avgSize: genome.size,
+        centroid: cloneGenome(genome), // average DNA of living members
+        niche: niche(genome),
       };
       this.byId.set(sp.id, sp);
       return sp;
     }
-    // A baby stays in its parent's species unless it has drifted too far
-    // from that species' founder, in which case a new species branches off.
-    assign(genome, parentSpeciesId, time) {
+    // A baby stays in its parent's species unless it has drifted too far from
+    // the species' current average DNA, in which case a new species branches
+    // off. `sibling` is a species a littermate just founded, which it may join.
+    assign(genome, parentSpeciesId, time, sibling) {
       const parent = this.byId.get(parentSpeciesId);
-      if (parent && distance(genome, parent.founder) <= Evo.K.SPECIES_THRESHOLD) return parent;
+      if (parent && distance(genome, parent.centroid) <= Evo.K.SPECIES_THRESHOLD) return parent;
+      if (sibling && distance(genome, sibling.founder) <= Evo.K.SPECIES_THRESHOLD) return sibling;
       return this.create(genome, parentSpeciesId, time);
     }
     get(id) { return this.byId.get(id); }
     living() { return [...this.byId.values()].filter((s) => s.count > 0); }
   }
 
+  // Ecological role, from a genome (or a species' average genome).
+  function niche(g) {
+    if (g.diet >= 0.66) return 'carnivore';
+    if (g.diet >= 0.33) return 'omnivore';
+    if (g.swim >= 0.5) return 'swimmer';
+    return g.feeding >= 0.5 ? 'browser' : 'grazer';
+  }
+
   Evo.GENES = GENES;
+  Evo.niche = niche;
   Evo.GENE_BY_KEY = GENE_BY_KEY;
   Evo.clamp = clamp;
   Evo.Genome = { make: makeGenome, clone: cloneGenome, mutate, crossover, distance, phenotype };

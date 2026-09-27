@@ -7,12 +7,14 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 ## Already in v1
 
 - Configurable map size, water level, and wrap-around edges (a torus, so no borders)
-- 14 evolvable genes plus a neutral color gene; mutation rate is itself a gene
+- 16 evolvable genes plus a neutral color gene; mutation rate is itself a gene
 - Size/mass trade-offs based on real scaling laws (Kleiber's law, strength ~ mass^0.67)
 - Herbivores, omnivores and carnivores on one diet slider, with a digestion trade-off
 - Fleeing, hunting, fighting back, scavenging, herding, resting, stamina and sprinting
 - Sexual reproduction with crossover, and asexual budding as a fallback
 - Speciation with generated names, extinction tracking, and an event log
+- Reproductive isolation (mates must look alike and be genetically close)
+- Three plant foods (grass, tree leaves, water plants), so herbivores can split into grazers, browsers and swimmers
 - Seasons, carcasses that rot, camouflage that works best in forests
 - God tools: drop creatures, grow food, smite, clone a creature
 
@@ -23,7 +25,6 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - **Heatmap overlays**: where creatures die, where predators hunt, plant density.
 - **Random events**: drought, ice age, meteor strike, plague, an invasive species arrives.
 - **Day/night cycle** plus a `nocturnal` gene: night hunters see better in the dark.
-- **Swimming gene**: lets creatures cross shallow or deep water, so islands can be colonized.
 - **Temperature**: colder toward the poles and on mountains, plus a `fur` gene (costly in the heat, vital in the cold). This drives species apart geographically.
 
 ## Medium: richer biology

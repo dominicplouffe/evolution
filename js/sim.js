@@ -4,11 +4,11 @@
   'use strict';
 
   const HERBIVORE = {
-    size: 1, speed: 1, stamina: 1, sense: 1, diet: 0.05, aggression: 0.15, fear: 0.7,
+    size: 1, speed: 1, stamina: 1, sense: 1, diet: 0.05, feeding: 0.25, swim: 0.05, aggression: 0.15, fear: 0.7,
     armor: 0.05, camo: 0.1, social: 0.5, litter: 2, maturity: 25, lifespan: 150, mutation: 0.1, hue: 50,
   };
   const CARNIVORE = {
-    size: 1.15, speed: 1.4, stamina: 1.2, sense: 1.6, diet: 0.9, aggression: 0.75, fear: 0.2,
+    size: 1.15, speed: 1.4, stamina: 1.2, sense: 1.6, diet: 0.9, feeding: 0.3, swim: 0.1, aggression: 0.75, fear: 0.2,
     armor: 0.05, camo: 0.2, social: 0.15, litter: 1.6, maturity: 20, lifespan: 200, mutation: 0.1, hue: 0,
   };
 
@@ -96,12 +96,17 @@
       mother.children += litter;
       mother.mateSearch = 0;
 
+      let founded = null; // a new species founded by a littermate
       for (let i = 0; i < litter; i++) {
         let genome = father ? Evo.Genome.crossover(mother.g, father.g, this.rng) : Evo.Genome.clone(mother.g);
         genome = Evo.Genome.mutate(genome, this.rng, this.cfg.mutationScale);
-        const sp = this.species.assign(genome, mother.species, this.time);
-        if (sp.id !== mother.species && sp.count === 0 && sp.born === this.time) {
-          this.logEvent(`New species <b>${sp.name}</b> branched off from ${this.species.get(mother.species).name}`);
+        const sp = this.species.assign(genome, mother.species, this.time, founded);
+        if (sp.id !== mother.species && sp.count === 0) {
+          founded = sp;
+          const parent = this.species.get(mother.species);
+          sp.niche = Evo.niche(genome);
+          const change = sp.niche !== parent.niche ? ` — a new <b>${sp.niche}</b>!` : '';
+          this.logEvent(`New species <b>${sp.name}</b> branched off from ${parent.name}${change}`, sp.niche !== parent.niche);
         }
         const a = this.rng.float(0, Math.PI * 2);
         const x = mother.x + Math.cos(a) * mother.phen.radius;
@@ -192,21 +197,32 @@
 
     census() {
       const counts = { herbivore: 0, omnivore: 0, carnivore: 0 };
+      const niches = { grazer: 0, browser: 0, swimmer: 0, omnivore: 0, carnivore: 0 };
       const sums = {};
       for (const gene of Evo.GENES) sums[gene.key] = 0;
-      for (const sp of this.species.byId.values()) { sp.count = 0; sp._diet = 0; sp._size = 0; }
+      for (const sp of this.species.byId.values()) {
+        sp.count = 0;
+        sp._sum = {};
+        for (const gene of Evo.GENES) sp._sum[gene.key] = 0;
+      }
       for (const c of this.creatures) {
         counts[c.dietClass]++;
-        for (const gene of Evo.GENES) sums[gene.key] += c.g[gene.key];
+        niches[Evo.niche(c.g)]++;
         const sp = this.species.get(c.species);
         sp.count++;
-        sp._diet += c.g.diet;
-        sp._size += c.g.size;
+        for (const gene of Evo.GENES) {
+          sums[gene.key] += c.g[gene.key];
+          sp._sum[gene.key] += c.g[gene.key];
+        }
       }
       for (const sp of this.species.byId.values()) {
         if (sp.count > 0) {
-          sp.avgDiet = sp._diet / sp.count;
-          sp.avgSize = sp._size / sp.count;
+          for (const gene of Evo.GENES) {
+            if (!gene.neutral) sp.centroid[gene.key] = sp._sum[gene.key] / sp.count;
+          }
+          sp.avgDiet = sp.centroid.diet;
+          sp.avgSize = sp.centroid.size;
+          sp.niche = Evo.niche(sp.centroid);
           sp.peak = Math.max(sp.peak, sp.count);
           sp.extinctAt = null;
         } else if (sp.extinctAt === null && sp.peak > 0) {
@@ -219,7 +235,7 @@
       for (const gene of Evo.GENES) avg[gene.key] = n ? sums[gene.key] / n : 0;
       this.stats.peakPopulation = Math.max(this.stats.peakPopulation, n);
       this.history.push({
-        t: this.time, n, ...counts,
+        t: this.time, n, ...counts, niches,
         plants: this.world.totalPlant() / (this.world.cols * this.world.rows),
         species: this.species.living().length,
         avg,
@@ -231,8 +247,8 @@
       }
     }
 
-    logEvent(html) {
-      this.events.unshift({ t: this.time, html });
+    logEvent(html, important) {
+      this.events.unshift({ t: this.time, html, important: !!important });
       if (this.events.length > 60) this.events.length = 60;
     }
 

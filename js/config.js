@@ -30,11 +30,12 @@
     TILE: 16,              // world units per tile
     DT: 1 / 30,            // fixed simulation step (seconds)
     PLANT_MAX: 5,          // plant energy on a fully fertile tile
-    PLANT_REGROW: 0.05,    // plant energy/sec per tile at fertility 1
-    MEAT_PER_MASS: 100,    // corpse energy per unit of body mass
+    PLANT_REGROW: 0.08,    // plant energy/sec per tile at fertility 1
+    MEAT_PER_MASS: 70,     // corpse energy per unit of body mass
     CORPSE_DECAY: 0.025,   // fraction of a corpse that rots per second
     SPECIES_THRESHOLD: 0.17, // genetic distance that founds a new species
-    MATE_THRESHOLD: 0.2,   // max genetic distance for two creatures to mate
+    MATE_THRESHOLD: 0.12,  // max genetic distance for two creatures to mate
+    MATE_HUE: 45,          // max color difference (degrees) a creature accepts in a mate
     PREDATOR_DIET: 0.35,   // diet value above which a creature can hunt
   };
 })((globalThis.Evo = globalThis.Evo || {}));

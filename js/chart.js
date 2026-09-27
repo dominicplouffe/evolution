@@ -14,6 +14,14 @@
           { name: 'Carnivores', color: C.carn, get: (h) => h.carnivore },
         ],
       },
+      {
+        id: 'niches', label: 'Herbivores by niche',
+        series: [
+          { name: 'Grazers', color: C.herb, get: (h) => (h.niches ? h.niches.grazer : 0) },
+          { name: 'Browsers', color: C.omni, get: (h) => (h.niches ? h.niches.browser : 0) },
+          { name: 'Swimmers', color: C.main, get: (h) => (h.niches ? h.niches.swimmer : 0) },
+        ],
+      },
       { id: 'total', label: 'Total population', series: [{ name: 'Creatures', color: C.main, get: (h) => h.n }] },
       { id: 'species', label: 'Living species', series: [{ name: 'Species', color: C.main, get: (h) => h.species }] },
       { id: 'plants', label: 'Plant food per tile', series: [{ name: 'Plants', color: C.herb, get: (h) => h.plants, digits: 2 }] },

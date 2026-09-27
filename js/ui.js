@@ -168,7 +168,7 @@
           for (let dx = -n; dx <= n; dx++) {
             if (Math.hypot(dx, dy) * T > BRUSH) continue;
             const i = w.tileIndex(q.x + dx * T, q.y + dy * T);
-            if (i >= 0) w.plant[i] = w.plantMax[i];
+            if (i >= 0) for (const f of Evo.FOODS) w.food[f.key].amt[i] = w.food[f.key].max[i];
           }
         }
         this.renderer.lastTerrain = -1;
@@ -206,7 +206,10 @@
       document.querySelectorAll('#tools button').forEach((b) => b.addEventListener('click', () => this.setTool(b.dataset.tool)));
       document.querySelectorAll('#speeds button').forEach((b) => b.addEventListener('click', () => this.setSpeed(Number(b.dataset.speed))));
       $('#playPause').addEventListener('click', () => this.togglePause());
-      $('#colorMode').addEventListener('change', (e) => { this.renderer.colorMode = e.target.value; });
+      $('#colorMode').addEventListener('change', (e) => {
+        this.renderer.colorMode = e.target.value;
+        this.updateMapLegend();
+      });
       $('#showSense').addEventListener('change', (e) => { this.renderer.showSense = e.target.checked; });
       $('#chartMetric').addEventListener('change', (e) => this.chart.setMetric(e.target.value));
       $('#newWorld').addEventListener('click', () => { this.readSettings(); this.newWorld(); });
@@ -311,12 +314,17 @@
         <ul>
           <li><b>Energy</b>: everything costs energy. Resting cost grows with mass<sup>0.75</sup> (Kleiber's law);
           moving costs mass × speed². Expensive genes (muscle, senses, armor) raise upkeep.</li>
-          <li><b>Food</b>: plants regrow on fertile tiles (faster in summer). Dead creatures leave meat that rots.</li>
+          <li><b>Food</b>: three kinds of plants regrow (faster in summer): <b>grass</b> on open land, <b>tree leaves</b>
+          in forests, and <b>water plants</b> in the shallows. Dead creatures leave meat that rots.</li>
+          <li><b>Niches</b>: small-mouthed <b>grazers</b> eat grass; big <b>browsers</b> reach tree leaves
+          (the Browsing gene); <b>swimmers</b> feed in water and can cross deep water. Being good at one food makes
+          a creature worse at the others, so plant-eaters can split into specialists that live side by side.</li>
           <li><b>Diet</b> is a sliding scale: good at digesting meat means bad at plants, and vice-versa.</li>
-          <li><b>Breeding</b>: adults with enough energy look for a genetically similar mate; if none is found
-          for a while they may reproduce alone.</li>
-          <li><b>Species</b>: when a lineage drifts far enough from its founder, it becomes a new species
-          (with a new name). Colors are a neutral gene, so relatives look alike.</li>
+          <li><b>Breeding</b>: adults with enough energy look for a mate with similar DNA <i>and</i> a similar color;
+          if none is found for a while they may reproduce alone.</li>
+          <li><b>Species</b>: when a lineage drifts far enough from its species' average DNA, it becomes a new species
+          (with a new name). Because mates must be similar, diverged species stop interbreeding and stay separate.
+          Colors are a neutral gene, so relatives look alike. ⭐ in the event log marks a brand-new niche.</li>
         </ul>
         <p><b>Genes</b></p>
         <ul>${Evo.GENES.map((g) => `<li><b>${esc(g.label)}</b> — ${esc(g.desc)}</li>`).join('')}</ul>`;
@@ -327,13 +335,14 @@
       const sim = this.sim;
       const h = sim.history[sim.history.length - 1];
       const n = sim.creatures.length;
-      const counts = { herbivore: 0, omnivore: 0, carnivore: 0 };
-      for (const c of sim.creatures) counts[c.dietClass]++;
+      const niches = { grazer: 0, browser: 0, swimmer: 0, omnivore: 0, carnivore: 0 };
+      for (const c of sim.creatures) niches[Evo.niche(c.g)]++;
+      const NC = Evo.NICHE_COLORS;
       const stat = (v, k, color) => `<div class="stat"><div class="v">${v}</div><div class="k">${color ? `<span class="swatch" style="background:${color}"></span>` : ''}${k}</div></div>`;
       $('#stats').innerHTML =
         stat(n, 'creatures') + stat(h ? h.species : 0, 'species') + stat(sim.stats.maxGeneration, 'max generation') +
-        stat(counts.herbivore, 'herbivores', '#199e70') + stat(counts.omnivore, 'omnivores', '#c98500') + stat(counts.carnivore, 'carnivores', '#d55181') +
-        stat(sim.stats.births, 'births') + stat(sim.stats.deaths, 'deaths') + stat(sim.world.corpses.length, 'carcasses');
+        stat(niches.grazer, 'grazers', NC.grazer) + stat(niches.browser, 'browsers', NC.browser) + stat(niches.swimmer, 'swimmers', NC.swimmer) +
+        stat(niches.omnivore, 'omnivores', NC.omnivore) + stat(niches.carnivore, 'carnivores', NC.carnivore) + stat(sim.world.corpses.length, 'carcasses');
 
       const season = sim.seasonName();
       const icon = { Spring: '🌱', Summer: '☀️', Autumn: '🍂', Winter: '❄️' }[season];
@@ -345,7 +354,7 @@
         this.updateInspector();
         this.updateSpecies();
       }
-      $('#events').innerHTML = sim.events.map((e) => `<div><span class="t">${Evo.fmtTime(e.t)}</span>${e.html}</div>`).join('') ||
+      $('#events').innerHTML = sim.events.map((e) => `<div class="${e.important ? 'big' : ''}"><span class="t">${Evo.fmtTime(e.t)}</span>${e.important ? '⭐ ' : ''}${e.html}</div>`).join('') ||
         '<span class="muted">Nothing yet…</span>';
 
       if (n === 0 && !this.announcedExtinction) {
@@ -358,11 +367,10 @@
       const living = this.sim.species.living().sort((a, b) => b.count - a.count);
       $('#speciesCount').textContent = `(${living.length} alive)`;
       $('#speciesList').innerHTML = living.slice(0, 12).map((sp) => {
-        const diet = sp.avgDiet < 0.33 ? 'herbivore' : sp.avgDiet < 0.66 ? 'omnivore' : 'carnivore';
         const parent = sp.parentId ? this.sim.species.get(sp.parentId) : null;
         return `<div class="sp" data-id="${sp.id}" title="Click to follow a member">
           <span class="dot" style="background:hsl(${Math.round(sp.founder.hue)},80%,56%)"></span>
-          <div><div>${esc(sp.name)}</div><div class="meta">${diet} · size ${fmt(sp.avgSize, 2)}${parent ? ' · from ' + esc(parent.name) : ''}</div></div>
+          <div><div>${esc(sp.name)}</div><div class="meta"><span class="swatch" style="background:${Evo.NICHE_COLORS[sp.niche]}"></span>${sp.niche} · size ${fmt(sp.avgSize, 2)}${parent ? ' · from ' + esc(parent.name) : ''}</div></div>
           <span class="n">${sp.count}</span></div>`;
       }).join('') + (living.length > 12 ? `<div class="muted small">…and ${living.length - 12} more</div>` : '');
     }
@@ -383,7 +391,7 @@
       el.innerHTML = `
         <div class="insp-head">
           <span class="dot" style="background:hsl(${Math.round(c.g.hue)},80%,56%)"></span>
-          <div><b>${esc(sp ? sp.name : '?')}</b> #${c.id} <span class="muted">· ${c.dietClass}${c.grow < 1 ? ' · baby' : ''}</span><br>
+          <div><b>${esc(sp ? sp.name : '?')}</b> #${c.id} <span class="muted">· ${Evo.niche(c.g)}${c.grow < 1 ? ' · baby' : ''}</span><br>
           <span class="muted">${status}</span></div>
         </div>
         <div class="bars">
@@ -397,7 +405,8 @@
           <span class="k">Children · kills</span><span>${c.children} · ${c.kills}</span>
           <span class="k">Mass · top speed</span><span>${fmt(p.mass, 2)} · ${fmt(p.maxSpeed)}</span>
           <span class="k">Strength</span><span>${fmt(p.strength, 1)}/s</span>
-          <span class="k">Digests plants · meat</span><span>${fmt(p.plantEff * 100)}% · ${fmt(p.meatEff * 100)}%</span>
+          <span class="k">Digests grass · leaves</span><span>${fmt(p.eat.grass * 100)}% · ${fmt(p.eat.leaves * 100)}%</span>
+          <span class="k">Water plants · meat</span><span>${fmt(p.eat.algae * 100)}% · ${fmt(p.meatEff * 100)}%</span>
           <span class="k">Upkeep</span><span>${fmt(p.basal, 2)} energy/s</span>
         </div>
         <p class="muted small" style="margin:8px 0 0">DNA</p>
@@ -408,6 +417,17 @@
           <button data-act="clone">🧬 Clone ×5</button>
           <button data-act="kill">⚡ Kill</button>
         </div>`;
+    }
+
+    // Legend for the map colors when they encode niche or diet.
+    updateMapLegend() {
+      const el = $('#mapLegend');
+      const mode = this.renderer.colorMode;
+      let items = [];
+      if (mode === 'niche') items = Object.entries(Evo.NICHE_COLORS);
+      if (mode === 'diet') items = [['plants', 'hsl(120,75%,45%)'], ['mixed', 'hsl(60,75%,45%)'], ['meat', 'hsl(0,75%,45%)']];
+      el.style.display = items.length ? 'flex' : 'none';
+      el.innerHTML = items.map(([k, c]) => `<span><span class="dot" style="background:${c}"></span>${k}</span>`).join('');
     }
 
     toast(msg) {

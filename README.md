@@ -34,11 +34,18 @@ starting populations, plant growth, mutation rate, seasons and more.
 
 - **Map**: tile-based terrain generated from seamless noise (deep water, shallows,
   beach, plains, grassland, forest, rock, peaks). Each tile has a fertility and a
-  plant amount that regrows (logistic growth, faster in summer). With **wrap
+  plant food that regrows (faster in summer). With **wrap
   edges** on, the map is a torus: no borders, you can scroll forever.
 - **DNA** (`js/genome.js`): size, muscle, stamina, senses, diet (0 = plants,
-  1 = meat), aggression, fear, armor, camouflage, herding, litter size, maturity
-  age, lifespan, mutation rate (itself evolvable), and a neutral color gene.
+  1 = meat), browsing (grass vs. tree leaves), swimming, aggression, fear, armor,
+  camouflage, herding, litter size, maturity age, lifespan, mutation rate (itself
+  evolvable), and a neutral color gene.
+- **Plant food & niches**: tiles grow three foods: grass (open land), tree leaves
+  (forests) and water plants (shallows and deep water). Small grazers crop grass
+  best; leaves need the Browsing gene *and* a big body to reach; swimmers feed in
+  water and can cross deep water (swimming ≥ 0.5). Big bodies also feed from the
+  surrounding tiles. Specializing costs efficiency on the other foods, so plant
+  eaters can split into grazer, browser and swimmer species that coexist.
 - **Body from DNA**: mass = size³. Bigger means more health, strength and fat
   storage, but slower and hungrier. Resting cost scales with mass^0.75 (Kleiber's
   law), movement costs mass × speed². Every "good" gene has an upkeep cost.
@@ -51,8 +58,13 @@ starting populations, plant growth, mutation rate, seasons and more.
 - **Reproduction**: mature, well-fed adults find a genetically similar mate
   (crossover + mutation). If none is found for a while they can bud asexually.
   Litter size trades many small babies vs. few well-fed ones.
-- **Species**: when a lineage drifts far enough from its species' founder it
-  becomes a new named species.
+- **Species**: when a lineage drifts far enough from its species' current average
+  DNA it becomes a new named species. Mates must be genetically close *and*
+  similar in color, so once groups diverge they stop interbreeding and stay
+  separate (reproductive isolation). Genes that define a niche (diet, browsing,
+  swimming, size) weigh more in the genetic distance. Predators compete for prey
+  and herds spot danger earlier ("many eyes"), which keeps predator booms from
+  wiping out every herbivore type.
 - **Migration** (optional): if all plant-eaters or all meat-eaters die out, a small
   group wanders in after 30 s so the world can recover.
 
