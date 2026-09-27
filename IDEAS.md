@@ -7,7 +7,8 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 ## Already in v1
 
 - Configurable map size, water level, and wrap-around edges (a torus, so no borders)
-- 17 evolvable genes plus a neutral color gene; mutation rate is itself a gene
+- 17 evolvable genes; mutation rate is itself a gene
+- One colour per species; a new species gets a new colour
 - Size/mass trade-offs based on real scaling laws (Kleiber's law, strength ~ mass^0.67)
 - Herbivores, omnivores and carnivores on one diet slider, with a digestion trade-off
 - Fleeing, hunting, fighting back, scavenging, herding, resting, stamina and sprinting
@@ -34,7 +35,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - **Evolving brains**: replace the hand-written priority list with a small neural
   network whose weights live in the DNA (this is how The Bibites and evolv.io work).
   Behaviour itself evolves, and it's a lot more surprising.
-- **Pack hunting and kin recognition**: use the color gene to recognise relatives
+- **Pack hunting and kin recognition**: recognise relatives
   and hunt together.
 - **Sexual selection**: an "ornament" gene and a "pickiness" gene. Flashy creatures
   attract mates but are easier for predators to spot.

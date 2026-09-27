@@ -80,13 +80,11 @@
       return this.grow >= 1 && this.reproCooldown <= 0 && this.energy >= 0.75 * this.phen.maxEnergy && this.age < this.g.lifespan;
     }
 
-    // Mates must be genetically close AND look alike (similar color). Once two
+    // Mates must be genetically close (every gene counted equally). Once two
     // groups drift apart they stop interbreeding, so new species stay separate.
     canMateWith(o) {
       if (o === this || !o.alive || !o.isReadyToMate()) return false;
-      let hue = Math.abs(this.g.hue - o.g.hue);
-      if (hue > 180) hue = 360 - hue;
-      return hue < Evo.K.MATE_HUE && Evo.Genome.distance(this.g, o.g) < Evo.K.MATE_THRESHOLD;
+      return Evo.Genome.distance(this.g, o.g, true) < Evo.K.MATE_THRESHOLD;
     }
 
     // Does `o` look like a danger to me?
@@ -309,7 +307,8 @@
       return best;
     }
 
-    // Put food in the stomach (limited by room). Returns the volume swallowed.
+    // Put the digestible part of a meal in the stomach (limited by room), at
+    // the food's calories per unit. Returns the volume kept.
     swallow(volume, calPerUnit) {
       const v = Math.max(0, Math.min(volume, this.phen.stomachCap - this.stomach));
       this.stomach += v;
@@ -407,7 +406,7 @@
       this.digest(dt);
 
       // Swimmers dry out on land, which costs extra energy.
-      if (this.g.swim > 0.3 && !world.biomeAt(this.x, this.y).water) this.energy -= p.basal * 0.8 * (this.g.swim - 0.3) * dt;
+      if (this.g.swim > 0.5 && !world.biomeAt(this.x, this.y).water) this.energy -= p.basal * 1.2 * (this.g.swim - 0.5) * dt;
 
       // Metabolism: resting cost (Kleiber-ish) + movement cost ~ v².
       const vr = this.v / 50;
@@ -489,7 +488,7 @@
           if (d < p.radius + 5) {
             wantSpeed = 0;
             const bite = Math.min(p.biteRate * 1.5 * dt, t.meat);
-            t.meat -= this.swallow(bite, Evo.K.CAL.meat * p.meatEff);
+            t.meat -= this.swallow(bite * p.meatEff, Evo.K.CAL.meat) / p.meatEff;
             if (this.isFull()) this.state = STATE.DIGEST;
           }
           break;
@@ -514,9 +513,9 @@
               const eff = p.eat[f.key];
               const layer = world.food[f.key];
               if (eff <= 0.01 || layer.amt[ti] <= 0) continue;
-              const cal = Evo.K.CAL[f.key] * eff;
-              const want = Math.min(layer.amt[ti], (mouthful * w * layer.amt[ti] * cal) / value);
-              layer.amt[ti] -= this.swallow(want, cal);
+              const want = Math.min(layer.amt[ti], (mouthful * w * layer.amt[ti] * Evo.K.CAL[f.key] * eff) / value);
+              // Only the part I can digest is kept; the rest is wasted.
+              layer.amt[ti] -= this.swallow(want * eff, Evo.K.CAL[f.key]) / eff;
             }
           }
           break;

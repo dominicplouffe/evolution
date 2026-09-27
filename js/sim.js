@@ -4,12 +4,12 @@
   'use strict';
 
   const HERBIVORE = {
-    size: 1, speed: 1, stamina: 1, sense: 1, diet: 0.05, feeding: 0.25, swim: 0.05, appetite: 0.85, aggression: 0.15, fear: 0.7,
-    armor: 0.05, camo: 0.1, social: 0.5, litter: 2, maturity: 25, lifespan: 150, mutation: 0.1, hue: 50,
+    size: 1, speed: 1, stamina: 1, sense: 1, diet: 0.05, feeding: 0.1, swim: 0.05, appetite: 0.85, aggression: 0.15, fear: 0.7,
+    armor: 0.05, camo: 0.1, social: 0.5, litter: 2, maturity: 25, lifespan: 150, mutation: 0.1,
   };
   const CARNIVORE = {
     size: 1.15, speed: 1.4, stamina: 1.2, sense: 1.6, diet: 0.9, feeding: 0.3, swim: 0.1, appetite: 0.55, aggression: 0.75, fear: 0.2,
-    armor: 0.05, camo: 0.2, social: 0.15, litter: 1.6, maturity: 20, lifespan: 200, mutation: 0.1, hue: 0,
+    armor: 0.05, camo: 0.2, social: 0.15, litter: 1.6, maturity: 20, lifespan: 200, mutation: 0.1,
   };
 
   class Simulation {

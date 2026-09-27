@@ -116,7 +116,8 @@
         const d = c.g.diet;
         return `hsl(${Math.round(120 - 120 * d)}, 75%, ${45 + 10 * (1 - c.grow)}%)`;
       }
-      return `hsl(${Math.round(c.g.hue)}, 80%, ${56 + 12 * (1 - c.grow)}%)`;
+      const sp = this.sim.species.get(c.species);
+      return sp ? sp.color : '#ccc';
     }
 
     draw(selected, hoverWorld) {

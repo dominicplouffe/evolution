@@ -21,7 +21,6 @@
     { key: 'maturity', label: 'Maturity (s)', min: 6, max: 60, desc: 'Time to grow up before it can breed. Slow growers have better-developed babies and sturdier adults.' },
     { key: 'lifespan', label: 'Lifespan (s)', min: 60, max: 400, desc: 'Age at which it starts dying of old age. A body built to last costs more upkeep (repair).' },
     { key: 'mutation', label: 'Mutation rate', min: 0.01, max: 0.4, desc: 'Chance each gene mutates in its offspring. Evolvable!' },
-    { key: 'hue', label: 'Color', min: 0, max: 360, neutral: true, desc: 'Neutral marker gene that drifts over time: related creatures look alike.' },
   ];
   const GENE_BY_KEY = {};
   for (const g of GENES) GENE_BY_KEY[g.key] = g;
@@ -40,10 +39,6 @@
     const out = cloneGenome(g);
     const p = clamp(g.mutation * scale, 0, 1);
     for (const gene of GENES) {
-      if (gene.key === 'hue') {
-        out.hue = (out.hue + rng.gauss() * 5 * scale + 360) % 360;
-        continue;
-      }
       if (rng.chance(p)) {
         const span = gene.max - gene.min;
         // Mostly small steps, occasionally a big jump.
@@ -58,13 +53,7 @@
     const out = {};
     for (const gene of GENES) {
       const r = rng.next();
-      if (gene.key === 'hue') {
-        // Average hue on the circle.
-        let d = b.hue - a.hue;
-        if (d > 180) d -= 360;
-        if (d < -180) d += 360;
-        out.hue = (a.hue + d * rng.next() + 360) % 360;
-      } else if (r < 0.4) out[gene.key] = a[gene.key];
+      if (r < 0.4) out[gene.key] = a[gene.key];
       else if (r < 0.8) out[gene.key] = b[gene.key];
       else {
         const t = rng.next();
@@ -77,11 +66,13 @@
   // Weighted root-mean-square difference over non-neutral genes
   // (0 = identical, 1 = opposite). Genes that decide how a creature makes a
   // living weigh more, so a change of niche is enough to split a species.
-  function distance(a, b) {
+  // With `plain` set every gene counts equally (used for mate choice, so a
+  // creature drifting toward a new niche isn't shunned by potential mates).
+  function distance(a, b, plain) {
     let sum = 0, n = 0;
     for (const gene of GENES) {
       if (gene.neutral) continue;
-      const w = gene.weight || 1;
+      const w = plain ? 1 : gene.weight || 1;
       const d = (a[gene.key] - b[gene.key]) / (gene.max - gene.min);
       sum += w * d * d;
       n += w;
@@ -112,12 +103,17 @@
     const upkeep = 0.5 + 0.17 * g.speed + 0.1 * g.stamina + 0.15 * g.sense + 0.3 * g.armor + 0.12 * g.camo + 0.15 * g.swim + repair;
     // Slow-maturing species grow into sturdier adults.
     const matFrac = clamp((g.maturity - 6) / 54, 0, 1);
-    const plantEff = Math.pow(1 - g.diet, 1.4);
+    // Diet: a straight trade-off, so omnivores are workable stepping stones
+    // between plant-eaters and meat-eaters (both directions) without being
+    // better than the specialists.
+    const plantEff = 1 - g.diet;
     // Reaching tree leaves needs height; small mouths crop short grass best.
     // Young browsers get a head start (think of parents bending branches down),
     // otherwise their calves would starve in the forest.
-    const reach = clamp((g.size * (0.75 + 0.25 * grow) - 0.45) / 0.8, 0, 1);
+    const reach = clamp(0.6 + 0.4 * (g.size * (0.75 + 0.25 * grow) - 0.5), 0, 1);
     const grassMouth = 1.1 - 0.25 * clamp((s - 0.5) / 2.5, 0, 1);
+    // A water-adapted body is poor at digesting land plants (only when very aquatic).
+    const landGut = 1 - 0.6 * g.swim * g.swim;
     return {
       s,
       mass,
@@ -153,13 +149,16 @@
       footprint: clamp((s - 0.8) / 1.0, 0, 1),
       // Digestive efficiency per plant food: specializing in one costs the others.
       eat: {
-        // A water-adapted body is poor at digesting land plants.
-        grass: plantEff * (1 - 0.8 * g.feeding) * grassMouth * (1 - 0.6 * g.swim),
-        // Tough, fibrous leaves need a specialised gut: steep in Browsing.
-        leaves: plantEff * (0.05 + 0.95 * Math.pow(g.feeding, 1.5)) * reach * (1 - 0.6 * g.swim),
-        algae: plantEff * (0.05 + 0.95 * g.swim),
+        // Each small step toward a niche pays off: the new food's benefit rises
+        // quickly at first, while the loss on the old food only bites once a
+        // creature is well specialised. (Otherwise evolution can't cross over.)
+        grass: plantEff * (1 - 0.8 * g.feeding * g.feeding) * grassMouth * landGut,
+        leaves: plantEff * (0.03 + 0.97 * Math.pow(g.feeding, 0.75)) * reach * landGut,
+        // Water plants: useless to a plain land animal (swim ~0.05), but every
+        // step toward swimming pays off quickly.
+        algae: plantEff * Math.sqrt(clamp((g.swim - 0.05) / 0.95, 0, 1)),
       },
-      meatEff: Math.pow(g.diet, 1.1),
+      meatEff: g.diet,
     };
   }
 
@@ -174,6 +173,23 @@
     for (let i = 0; i < parts; i++) n += rng.pick(SYL_A) + rng.pick(SYL_V);
     n += rng.pick(SYL_E);
     return n[0].toUpperCase() + n.slice(1);
+  }
+
+  // Each species gets one flat colour; a new species gets a clearly different
+  // one. Hues are spread by the golden angle and skip the greens of the map.
+  function speciesColor(id, parent) {
+    if (id === 1) return 'hsl(50, 90%, 58%)';  // the founding grazers
+    if (id === 2) return 'hsl(355, 80%, 56%)'; // the founding predators
+    let h = ((id * 137.508) % 360) * (275 / 360); // spread over 275 degrees...
+    if (h >= 65) h += 85; // ...skipping 65-150 (the grass and forest greens)
+    if (parent) {
+      // Keep it well away from the parent's colour so the split is obvious.
+      const m = /hsl\((\d+)/.exec(parent.color || '');
+      if (m && Math.abs(((h - Number(m[1]) + 540) % 360) - 180) < 40) h = (h + 110) % 360;
+      if (h >= 65 && h < 150) h += 85;
+    }
+    const light = 52 + ((id * 7) % 3) * 8; // vary lightness too: 52 / 60 / 68%
+    return `hsl(${Math.round(h % 360)}, 85%, ${light}%)`;
   }
 
   class SpeciesRegistry {
@@ -196,21 +212,40 @@
         avgSize: genome.size,
         centroid: cloneGenome(genome), // average DNA of living members
         niche: niche(genome),
+        color: null,
       };
+      sp.color = speciesColor(sp.id, parentId ? this.byId.get(parentId) : null);
       this.byId.set(sp.id, sp);
       return sp;
     }
     // A baby stays in its parent's species unless it has drifted too far from
     // the species' current average DNA, in which case a new species branches
     // off. `sibling` is a species a littermate just founded, which it may join.
+    // A baby that has clearly moved into a different niche (grazer -> browser,
+    // land -> water, plants -> meat...) also founds a new species.
     assign(genome, parentSpeciesId, time, sibling) {
+      const fits = (sp, ref) => {
+        if (distance(genome, ref) > Evo.K.SPECIES_THRESHOLD) return false;
+        const clear = clearNiche(genome);
+        return !clear || clear === sp.niche;
+      };
       const parent = this.byId.get(parentSpeciesId);
-      if (parent && distance(genome, parent.centroid) <= Evo.K.SPECIES_THRESHOLD) return parent;
-      if (sibling && distance(genome, sibling.founder) <= Evo.K.SPECIES_THRESHOLD) return sibling;
+      if (parent && fits(parent, parent.centroid)) return parent;
+      if (sibling && fits(sibling, sibling.founder)) return sibling;
       return this.create(genome, parentSpeciesId, time);
     }
     get(id) { return this.byId.get(id); }
     living() { return [...this.byId.values()].filter((s) => s.count > 0); }
+  }
+
+  // The niche only when a genome is safely past the boundaries (margin 0.07),
+  // so creatures sitting on a boundary don't flip species back and forth.
+  function clearNiche(g) {
+    const m = 0.07;
+    const near = (v, edge) => Math.abs(v - edge) < m;
+    if (near(g.diet, 0.33) || near(g.diet, 0.66)) return null;
+    if (g.diet < 0.33 && (near(g.swim, 0.5) || (g.swim < 0.5 && near(g.feeding, 0.5)))) return null;
+    return niche(g);
   }
 
   // Ecological role, from a genome (or a species' average genome).
@@ -225,6 +260,7 @@
   Evo.niche = niche;
   Evo.GENE_BY_KEY = GENE_BY_KEY;
   Evo.clamp = clamp;
+  Evo.speciesColor = speciesColor;
   Evo.Genome = { make: makeGenome, clone: cloneGenome, mutate, crossover, distance, phenotype, birthGrowth };
   Evo.SpeciesRegistry = SpeciesRegistry;
 })((globalThis.Evo = globalThis.Evo || {}));

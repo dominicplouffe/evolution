@@ -38,7 +38,6 @@
     CORPSE_DECAY: 0.025,   // fraction of a corpse that rots per second
     SPECIES_THRESHOLD: 0.17, // genetic distance that founds a new species
     MATE_THRESHOLD: 0.12,  // max genetic distance for two creatures to mate
-    MATE_HUE: 45,          // max color difference (degrees) a creature accepts in a mate
     PREDATOR_DIET: 0.35,   // diet value above which a creature can hunt
   };
 })((globalThis.Evo = globalThis.Evo || {}));

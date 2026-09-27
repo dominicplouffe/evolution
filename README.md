@@ -40,7 +40,7 @@ starting populations, plant growth, mutation rate, seasons and more.
 - **DNA** (`js/genome.js`): size, muscle, stamina, senses, diet (0 = plants,
   1 = meat), browsing (grass vs. tree leaves), swimming, appetite, aggression, fear, armor,
   camouflage, herding, litter size, maturity age, lifespan, mutation rate (itself
-  evolvable), and a neutral color gene.
+  evolvable).
 - **Plant food & niches**: tiles grow three foods: grass (open land), tree leaves
   (forests) and water plants (shallows and deep water). Small grazers crop grass
   best; leaves need the Browsing gene *and* a big body to reach; swimmers feed in
@@ -73,11 +73,13 @@ starting populations, plant growth, mutation rate, seasons and more.
 - **Reproduction**: mature, well-fed adults find a genetically similar mate
   (crossover + mutation). If none is found for a while they can bud asexually.
   Litter size trades many small babies vs. few well-fed ones.
-- **Species**: when a lineage drifts far enough from its species' current average
-  DNA it becomes a new named species. Mates must be genetically close *and*
-  similar in color, so once groups diverge they stop interbreeding and stay
-  separate (reproductive isolation). Genes that define a niche (diet, browsing,
-  swimming, size) weigh more in the genetic distance. Predators compete for prey
+- **Species**: a baby founds a new named species when its DNA drifts far from its
+  species' current average (niche genes: diet, browsing, swimming and size weigh
+  more), or when it has clearly moved into another niche (grazer → browser,
+  land → water, plants → meat). Every species has one colour, and a new species
+  gets a clearly different one. Mates must be genetically close (all genes
+  weighed equally, so a creature drifting toward a new niche can still find
+  mates), so once groups diverge they stop interbreeding and stay separate. Predators compete for prey
   and herds spot danger earlier ("many eyes"), which keeps predator booms from
   wiping out every herbivore type.
 - **Migration** (optional): if all plant-eaters or all meat-eaters die out, a small

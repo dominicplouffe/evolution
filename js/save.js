@@ -108,6 +108,7 @@
       sp.founder = Evo.Genome.make(sp.founder);
       sp.centroid = Evo.Genome.make(sp.centroid || sp.founder);
       sp.niche = sp.niche || Evo.niche(sp.centroid);
+      sp.color = sp.color || Evo.speciesColor(sp.id, null); // saves from before v0.7
       sim.species.byId.set(sp.id, sp);
     }
     sim.species.nextId = d.species.nextId;

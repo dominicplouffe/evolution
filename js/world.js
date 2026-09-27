@@ -13,12 +13,12 @@
 
   // `food` = how much of each food type the biome can hold (0..1).
   const BIOMES = [
-    { id: 0, name: 'Deep water', color: [30, 60, 110], lush: [30, 80, 105], food: { algae: 0.35 }, speed: 0, passable: false, water: true, cover: 0 },
+    { id: 0, name: 'Deep water', color: [30, 60, 110], lush: [30, 80, 105], food: { algae: 1.0 }, speed: 0, passable: false, water: true, cover: 0 },
     { id: 1, name: 'Shallows', color: [58, 110, 160], lush: [45, 130, 130], food: { algae: 1, grass: 0.05 }, speed: 0.4, passable: true, water: true, cover: 0.2 },
     { id: 2, name: 'Beach', color: [205, 190, 140], lush: [170, 180, 110], food: { grass: 0.15, algae: 0.1 }, speed: 0.85, passable: true, cover: 0 },
     { id: 3, name: 'Dry plains', color: [176, 158, 104], lush: [130, 160, 70], food: { grass: 0.45, leaves: 0.08 }, speed: 1, passable: true, cover: 0.2 },
     { id: 4, name: 'Grassland', color: [120, 140, 80], lush: [70, 150, 50], food: { grass: 0.9, leaves: 0.3 }, speed: 1, passable: true, cover: 0.4 },
-    { id: 5, name: 'Forest', color: [70, 100, 60], lush: [30, 105, 40], food: { grass: 0.1, leaves: 2.2 }, speed: 0.75, passable: true, cover: 1 },
+    { id: 5, name: 'Forest', color: [70, 100, 60], lush: [30, 105, 40], food: { grass: 0.2, leaves: 3.5 }, speed: 0.75, passable: true, cover: 1 },
     { id: 6, name: 'Rock', color: [120, 115, 110], lush: [110, 120, 100], food: { grass: 0.05 }, speed: 0.55, passable: true, cover: 0.3 },
     { id: 7, name: 'Peak', color: [225, 225, 230], lush: [225, 225, 230], food: {}, speed: 0, passable: false, cover: 0 },
   ];
@@ -168,7 +168,7 @@
     speedFactor(biome, swim) {
       if (biome.id === 0) return 0.2 + 0.8 * swim;
       if (biome.id === 1) return 0.35 + 0.75 * swim;
-      return biome.speed * (1 - 0.55 * swim);
+      return biome.speed * (1 - 0.55 * swim * swim);
     }
 
     // Calories a creature could get from a tile's plants, given how well it

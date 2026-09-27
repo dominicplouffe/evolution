@@ -427,12 +427,14 @@
           <li><b>Niches</b>: small-mouthed <b>grazers</b> eat grass; big <b>browsers</b> reach tree leaves
           (the Browsing gene); <b>swimmers</b> feed in water, can cross deep water, and dry out on land, so they stay near (and flee into) water. Being good at one food makes
           a creature worse at the others, so plant-eaters can split into specialists that live side by side.</li>
-          <li><b>Diet</b> is a sliding scale: good at digesting meat means bad at plants, and vice-versa.</li>
-          <li><b>Breeding</b>: adults with enough energy look for a mate with similar DNA <i>and</i> a similar color;
+          <li><b>Diet</b> is a sliding scale: good at digesting meat means bad at plants, and vice-versa. Omnivores sit
+          in between, so plant-eaters can become meat-eaters (and back) one small step at a time.</li>
+          <li><b>Breeding</b>: adults with enough energy look for a mate with similar DNA;
           if none is found for a while they may reproduce alone.</li>
-          <li><b>Species</b>: when a lineage drifts far enough from its species' average DNA, it becomes a new species
-          (with a new name). Because mates must be similar, diverged species stop interbreeding and stay separate.
-          Colors are a neutral gene, so relatives look alike. ⭐ in the event log marks a brand-new niche.</li>
+          <li><b>Species</b>: a baby founds a new species (new name, new colour) when its DNA has drifted far from its
+          species' average, or when it has clearly moved into a different niche, like a grazer's calf that has become a
+          browser. Each species has one colour, so you can follow it on the map. Because mates must be similar,
+          diverged species stop interbreeding and stay separate. ⭐ in the event log marks a brand-new niche.</li>
         </ul>
         <p><b>Genes</b></p>
         <ul>${Evo.GENES.map((g) => `<li><b>${esc(g.label)}</b> — ${esc(g.desc)}</li>`).join('')}</ul>`;
@@ -477,7 +479,7 @@
       $('#speciesList').innerHTML = living.slice(0, 12).map((sp) => {
         const parent = sp.parentId ? this.sim.species.get(sp.parentId) : null;
         return `<div class="sp" data-id="${sp.id}" title="Click to follow a member">
-          <span class="dot" style="background:hsl(${Math.round(sp.founder.hue)},80%,56%)"></span>
+          <span class="dot" style="background:${sp.color}"></span>
           <div><div>${esc(sp.name)}</div><div class="meta"><span class="swatch" style="background:${Evo.NICHE_COLORS[sp.niche]}"></span>${sp.niche} · size ${fmt(sp.avgSize, 2)}${parent ? ' · from ' + esc(parent.name) : ''}</div></div>
           <span class="n">${sp.count}</span></div>`;
       }).join('') + (living.length > 12 ? `<div class="muted small">…and ${living.length - 12} more</div>` : '');
@@ -498,7 +500,7 @@
       }).join('');
       el.innerHTML = `
         <div class="insp-head">
-          <span class="dot" style="background:hsl(${Math.round(c.g.hue)},80%,56%)"></span>
+          <span class="dot" style="background:${sp ? sp.color : '#ccc'}"></span>
           <div><b>${esc(sp ? sp.name : '?')}</b> #${c.id} <span class="muted">· ${Evo.niche(c.g)}${c.grow < 1 ? ' · baby' : ''}</span><br>
           <span class="muted">${status}</span></div>
         </div>
