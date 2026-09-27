@@ -52,10 +52,10 @@ button.primary:hover { background: #2a5286; }
 .seg button:last-child { border-radius: 0 6px 6px 0; }
 
 #toolbar { position: absolute; top: 8px; left: 8px; display: flex; gap: 12px; flex-wrap: wrap; padding: 6px;
-  background: rgba(20, 27, 38, 0.92); max-width: calc(100% - 16px); }
+  background: rgba(20, 27, 38, 0.92); max-width: calc(100% - 16px - 232px); } /* leave room for the HUD */
 #toolbar .group { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 #toolbar label { color: var(--text-2); display: flex; gap: 4px; align-items: center; }
-#hud { position: absolute; top: 8px; right: 8px; padding: 6px 10px; background: rgba(20, 27, 38, 0.92);
+#hud { position: absolute; top: 8px; right: 8px; width: 224px; padding: 6px 10px; background: rgba(20, 27, 38, 0.92);
   font-variant-numeric: tabular-nums; text-align: right; }
 #help { position: absolute; bottom: 8px; left: 8px; padding: 4px 8px; background: rgba(20, 27, 38, 0.85);
   color: var(--text-2); font-size: 12px; }
@@ -113,4 +113,7 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
   #stage { height: 65vh; flex: none; }
   #side { width: 100%; border-left: none; overflow: visible; }
   #help { display: none; }
+  #toolbar { max-width: calc(100% - 16px); }
+  #hud { top: auto; bottom: 8px; }
+  #toast { bottom: 110px; }
 }

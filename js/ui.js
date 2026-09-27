@@ -197,6 +197,11 @@
       if (this.paused) this.togglePause();
     }
 
+    fitMap() {
+      this.follow = false;
+      this.renderer.fit();
+    }
+
     togglePause() {
       this.paused = !this.paused;
       $('#playPause').textContent = this.paused ? '▶ Play' : '⏸ Pause';
@@ -206,6 +211,7 @@
       document.querySelectorAll('#tools button').forEach((b) => b.addEventListener('click', () => this.setTool(b.dataset.tool)));
       document.querySelectorAll('#speeds button').forEach((b) => b.addEventListener('click', () => this.setSpeed(Number(b.dataset.speed))));
       $('#playPause').addEventListener('click', () => this.togglePause());
+      $('#fitMap').addEventListener('click', () => this.fitMap());
       $('#colorMode').addEventListener('change', (e) => {
         this.renderer.colorMode = e.target.value;
         this.updateMapLegend();
@@ -258,7 +264,7 @@
         if (key >= '1' && key <= '6') this.setSpeed(speeds[Number(key) - 1]);
         if (key === 'f' && this.selected) this.follow = !this.follow;
         if (key === 'escape') this.select(null);
-        if (key === 'home') this.renderer.fit();
+        if (key === '0' || key === 'home') this.fitMap();
         const tools = { i: 'inspect', h: 'herbivore', c: 'carnivore', g: 'food', x: 'smite' };
         if (tools[key]) this.setTool(tools[key]);
         if (key.startsWith('arrow')) e.preventDefault();
@@ -352,7 +358,7 @@
       const season = sim.seasonName();
       const icon = { Spring: '🌱', Summer: '☀️', Autumn: '🍂', Winter: '❄️' }[season];
       const rate = this.paused ? 'paused' : `${fmt(this.simRate.rate, 1)}× speed`;
-      $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}<br><span class="muted">${rate} · seed ${sim.seed}</span>`;
+      $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}<br><span class="muted">${rate} · seed ${sim.seed}</span><br><span class="muted small">v${Evo.VERSION.number} · ${Evo.VERSION.date}</span>`;
 
       this.chart.draw(sim.history);
       if (!this.pressing) {
