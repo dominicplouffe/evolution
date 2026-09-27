@@ -168,13 +168,15 @@
     speedFactor(biome, swim) {
       if (biome.id === 0) return 0.2 + 0.8 * swim;
       if (biome.id === 1) return 0.35 + 0.75 * swim;
-      return biome.speed * (1 - 0.3 * swim);
+      return biome.speed * (1 - 0.55 * swim);
     }
 
-    // Total plant food on a tile, weighted by how well `eat` digests each kind.
+    // Calories a creature could get from a tile's plants, given how well it
+    // digests each kind (`eat`).
     foodValue(i, eat) {
-      const f = this.food;
-      return f.grass.amt[i] * eat.grass + f.leaves.amt[i] * eat.leaves + f.algae.amt[i] * eat.algae;
+      const f = this.food, cal = Evo.K.CAL;
+      return f.grass.amt[i] * cal.grass * eat.grass + f.leaves.amt[i] * cal.leaves * eat.leaves +
+        f.algae.amt[i] * cal.algae * eat.algae;
     }
 
     randomPassablePoint(rng, preferFertile) {
@@ -219,13 +221,13 @@
       }
       // Corpses rot away.
       const decay = Evo.K.CORPSE_DECAY * dt;
-      for (const c of this.corpses) c.energy -= c.energy * decay + 0.3 * dt;
-      this.corpses = this.corpses.filter((c) => c.energy > 0.5);
+      for (const c of this.corpses) c.meat -= c.meat * decay + 0.08 * dt;
+      this.corpses = this.corpses.filter((c) => c.meat > 0.2);
       this.corpseHash.rebuild(this.corpses);
     }
 
-    addCorpse(x, y, energy) {
-      if (energy > 0.5) this.corpses.push({ x, y, energy, initial: energy });
+    addCorpse(x, y, meat) {
+      if (meat > 0.2) this.corpses.push({ x, y, meat, initial: meat });
     }
 
     totalPlant() {

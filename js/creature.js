@@ -13,6 +13,7 @@
     FLEE: 'Fleeing',
     MATE: 'Courting',
     REST: 'Resting',
+    DIGEST: 'Digesting',
   };
 
   let nextId = 1;
@@ -38,6 +39,9 @@
       this.health = this.phen.maxHealth;
       this.energy = opts.energy !== undefined ? Math.min(opts.energy, this.phen.maxEnergy) : this.phen.maxEnergy * 0.7;
       this.stamina = this.phen.maxStamina;
+      this.stomach = 0;      // food volume waiting to be digested
+      this.stomachCal = 0;   // usable calories in that food
+      this.hungry = false;
       this.exhausted = false;
       this.alive = true;
       this.species = opts.species;
@@ -59,6 +63,7 @@
       this.thinkTimer = sim.rng.float(0, 0.3);
       this.wanderTurn = 0;
       this.herdSize = 0;
+      this.home = null;
       this.chasedBy = null;
       this.sprinting = false;
       this.deathCause = null;
@@ -107,7 +112,8 @@
       let herdX = 0, herdY = 0, herdHX = 0, herdHY = 0, herdN = 0;
       // "Many eyes": a creature in a herd spots danger earlier.
       const fleeDist = sense * (0.2 + 0.8 * g.fear) * (1 + 0.1 * Math.min(this.herdSize, 6) * g.social);
-      const hungry = this.energy < 0.85 * p.maxEnergy;
+      // Only look for food when hungry and there's room in the stomach.
+      const hungry = this.hungry && this.stomach < 0.9 * p.stomachCap;
       const canHunt = g.diet >= Evo.K.PREDATOR_DIET && this.grow > 0.7 && this.huntCooldown <= 0 && hungry;
       const ready = this.isReadyToMate();
 
@@ -135,7 +141,7 @@
         if (canHunt && o.species !== this.species && !taken) {
           const bravery = 0.8 + 1.5 * g.aggression;
           if (o.phen.mass < p.mass * bravery && o.health < p.strength * 12 * (0.5 + g.aggression)) {
-            const s = (o.phen.mass * Evo.K.MEAT_PER_MASS * p.meatEff) / (d + 30);
+            const s = (o.phen.mass * Evo.K.MEAT_PER_MASS * Evo.K.CAL.meat * p.meatEff) / (d + 30);
             if (s > preyScore) { preyScore = s; prey = o; }
           }
         }
@@ -147,6 +153,16 @@
       if (threats > 0 && (fx !== 0 || fy !== 0)) {
         this.state = STATE.FLEE;
         this.fleeX = fx; this.fleeY = fy;
+        // Swimmers bolt for the water, where land predators are slow.
+        if (g.swim >= 0.5) {
+          const home = this.findHome(world, sim.rng);
+          if (home) {
+            const hx = world.dx(this.x, home.x), hy = world.dy(this.y, home.y);
+            const hd = Math.hypot(hx, hy) || 1, fd = Math.hypot(fx, fy) || 1;
+            this.fleeX = fx / fd + (1.5 * hx) / hd;
+            this.fleeY = fy / fd + (1.5 * hy) / hd;
+          }
+        }
         this.target = null;
         return;
       }
@@ -186,7 +202,7 @@
 
         if (p.meatEff > 0.15) {
           world.corpseHash.query(this.x, this.y, sense, (c, dx, dy, d2) => {
-            const s = (Math.min(c.energy, p.maxEnergy) * p.meatEff) / (Math.sqrt(d2) + 30);
+            const s = (Math.min(c.meat * Evo.K.CAL.meat, p.maxEnergy) * p.meatEff) / (Math.sqrt(d2) + 30);
             if (s > bestScore) { bestScore = s; best = c; bestKind = 'corpse'; bestState = STATE.SCAVENGE; }
           });
         }
@@ -216,7 +232,11 @@
             }
             const ti = world.tileIndex(tx, ty);
             if (ti < 0 || !world.canEnter(tx, ty, g.swim)) continue;
-            const s = world.foodValue(ti, p.eat) / (r + 15);
+            let s = world.foodValue(ti, p.eat) / (r + 15);
+            // Prefer feeding in my own habitat.
+            const wet = !!Evo.BIOMES[world.biome[ti]].water;
+            if (g.swim >= 0.5 && !wet) s *= 0.35;
+            else if (g.swim < 0.3 && wet) s *= 0.5;
             if (s > bestScore) {
               bestScore = s;
               best = { x: tx, y: ty };
@@ -241,9 +261,17 @@
         }
       }
 
-      // ---- 5. rest when full (saves energy), otherwise wander (with herding)
+      // ---- 5. go home: swimmers return to water, land animals leave it
+      this.home = this.findHome(world, sim.rng);
+      if (this.home) {
+        this.state = STATE.WANDER;
+        this.target = null;
+        return;
+      }
+
+      // ---- 6. rest when full (saves energy), otherwise wander (with herding)
       if (!hungry && !ready && sim.rng.chance(0.85)) {
-        this.state = STATE.REST;
+        this.state = this.stomach > 0.25 * p.stomachCap ? STATE.DIGEST : STATE.REST;
         this.target = null;
         return;
       }
@@ -256,6 +284,59 @@
         const want = Math.hypot(herdX / herdN, herdY / herdN) > 40 ? cohesion : align;
         this.wanderTurn += angleDiff(this.heading, want) * g.social * 2;
       }
+    }
+
+    // Swimmers feel at home in water, everyone else on land. If I'm in the
+    // wrong place, pick the nearest point of my habitat I can see.
+    findHome(world, rng) {
+      const swim = this.g.swim;
+      const inWater = !!world.biomeAt(this.x, this.y).water;
+      const wantWater = swim >= 0.5;
+      if (inWater === wantWater || (swim > 0.3 && swim < 0.5)) return null;
+      let best = null, bestD = Infinity;
+      const r0 = this.phen.senseRadius;
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2 + rng.float(0, 0.4);
+        for (const f of [0.25, 0.6, 1]) {
+          const x = this.x + Math.cos(a) * r0 * f, y = this.y + Math.sin(a) * r0 * f;
+          const b = world.biomeAt(x, y);
+          if (!!b.water !== wantWater || !world.canEnter(x, y, swim)) continue;
+          if (r0 * f < bestD) { bestD = r0 * f; best = { x, y }; }
+          break;
+        }
+      }
+      return best;
+    }
+
+    // Put food in the stomach (limited by room). Returns the volume swallowed.
+    swallow(volume, calPerUnit) {
+      const v = Math.max(0, Math.min(volume, this.phen.stomachCap - this.stomach));
+      this.stomach += v;
+      this.stomachCal += v * calPerUnit;
+      return v;
+    }
+
+    // Stomach full, or I've eaten enough to top up my reserves.
+    isFull() {
+      const p = this.phen;
+      return this.stomach >= 0.98 * p.stomachCap || this.energy + this.stomachCal >= 0.98 * p.maxEnergy;
+    }
+
+    // Digest a steady share of the stomach into energy, and update hunger:
+    // hungry below my Appetite level, satisfied once reserves + meal are full.
+    digest(dt) {
+      const p = this.phen;
+      if (this.stomach > 0) {
+        const v = Math.min(this.stomach, p.stomachCap * p.digestRate * dt);
+        const cal = (this.stomachCal * v) / this.stomach;
+        this.stomach -= v;
+        this.stomachCal -= cal;
+        this.energy = Math.min(p.maxEnergy, this.energy + cal);
+        if (this.stomach < 1e-6) { this.stomach = 0; this.stomachCal = 0; }
+      }
+      const total = this.energy + this.stomachCal;
+      if (total < this.g.appetite * p.maxEnergy) this.hungry = true;
+      else if (total >= 0.98 * p.maxEnergy) this.hungry = false;
     }
 
     // The tiles I can feed from without moving: my own tile, plus (for big
@@ -321,8 +402,13 @@
       this.act(dt, sim);
       this.move(dt, world);
 
-      // Metabolism: resting cost (Kleiber-ish) + movement cost ~ v².
       const p = this.phen;
+      this.digest(dt);
+
+      // Swimmers dry out on land, which costs extra energy.
+      if (this.g.swim > 0.3 && !world.biomeAt(this.x, this.y).water) this.energy -= p.basal * 0.8 * (this.g.swim - 0.3) * dt;
+
+      // Metabolism: resting cost (Kleiber-ish) + movement cost ~ v².
       const vr = this.v / 50;
       this.energy -= (p.basal + p.moveCost * vr * vr) * dt;
 
@@ -396,15 +482,14 @@
         }
 
         case STATE.SCAVENGE: {
-          if (!t || t.energy <= 0.5) { this.state = STATE.WANDER; this.target = null; break; }
+          if (!t || t.meat <= 0.2) { this.state = STATE.WANDER; this.target = null; break; }
           const d = distTo(t);
           wantHeading = headTo(t);
           if (d < p.radius + 5) {
             wantSpeed = 0;
-            const bite = Math.min(p.biteRate * 1.5 * dt, t.energy, (p.maxEnergy - this.energy) / Math.max(p.meatEff, 0.01));
-            t.energy -= bite;
-            this.energy += bite * p.meatEff;
-            if (this.energy >= p.maxEnergy * 0.98) this.state = STATE.WANDER;
+            const bite = Math.min(p.biteRate * 1.5 * dt, t.meat);
+            t.meat -= this.swallow(bite, Evo.K.CAL.meat * p.meatEff);
+            if (this.isFull()) this.state = STATE.DIGEST;
           }
           break;
         }
@@ -414,27 +499,25 @@
           const patch = this.patchTiles(world);
           let value = 0;
           for (const [ti, w] of patch) value += w * world.foodValue(ti, p.eat);
-          if (value < 0.4 || this.energy >= p.maxEnergy * 0.98) {
-            this.state = STATE.WANDER;
+          if (value < 0.4 || this.isFull()) {
+            this.state = this.isFull() ? STATE.DIGEST : STATE.WANDER;
             this.thinkTimer = 0;
             break;
           }
-          // Holling type II: sparse food is slower to eat. The gain is split
-          // across food types in proportion to what each one is worth to me.
+          // Holling type II: sparse food is slower to eat. Mouthfuls are split
+          // across food types in proportion to the calories each is worth to me.
           const dens = value / Evo.K.PLANT_MAX;
-          const gain = p.biteRate * dt * (dens / (dens + 0.25)) * 1.25;
-          let got = 0;
+          const mouthful = p.biteRate * dt * (dens / (dens + 0.25)) * 1.25;
           for (const [ti, w] of patch) {
             for (const f of Evo.FOODS) {
               const eff = p.eat[f.key];
               const layer = world.food[f.key];
               if (eff <= 0.01 || layer.amt[ti] <= 0) continue;
-              const eaten = Math.min(layer.amt[ti], (gain * w * layer.amt[ti] * eff) / value / eff);
-              layer.amt[ti] -= eaten;
-              got += eaten * eff;
+              const cal = Evo.K.CAL[f.key] * eff;
+              const want = Math.min(layer.amt[ti], (mouthful * w * layer.amt[ti] * cal) / value);
+              layer.amt[ti] -= this.swallow(want, cal);
             }
           }
-          this.energy = Math.min(p.maxEnergy, this.energy + got);
           break;
         }
 
@@ -461,11 +544,15 @@
         }
 
         case STATE.REST:
+        case STATE.DIGEST:
           wantSpeed = 0;
           break;
 
         default: // WANDER
-          wantHeading = this.heading + this.wanderTurn * dt * 2;
+          if (this.home) {
+            wantHeading = headTo(this.home);
+            if (distTo(this.home) < Evo.K.TILE) this.home = null;
+          } else wantHeading = this.heading + this.wanderTurn * dt * 2;
           wantSpeed = cruise * 0.7;
       }
 

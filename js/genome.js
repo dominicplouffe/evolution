@@ -11,6 +11,7 @@
     { key: 'diet', label: 'Diet', min: 0, max: 1, weight: 3, desc: '0 = herbivore, 1 = carnivore. Digestion is a trade-off: good at one means bad at the other.' },
     { key: 'feeding', label: 'Browsing', min: 0, max: 1, weight: 3, desc: '0 = grazes low grass, 1 = browses tree leaves. Leaves are only reachable with a big body.' },
     { key: 'swim', label: 'Swimming', min: 0, max: 1, weight: 3, desc: 'Fast in water, eats water plants, crosses deep water above 0.5. Clumsy on land and costs upkeep.' },
+    { key: 'appetite', label: 'Appetite', min: 0.2, max: 0.95, desc: 'Energy level (fraction of its reserves) below which it gets hungry and looks for food.' },
     { key: 'aggression', label: 'Aggression', min: 0, max: 1, desc: 'Willingness to attack bigger prey and to fight back.' },
     { key: 'fear', label: 'Fear', min: 0, max: 1, desc: 'How early it runs away from predators.' },
     { key: 'armor', label: 'Armor', min: 0, max: 1, desc: 'Shell/hide. Reduces damage taken, but is heavy (slower) and costly.' },
@@ -119,14 +120,20 @@
       // + a fixed overhead so being tiny isn't free (organs, brain...)
       basal: 0.9 * (Math.pow(mass, 0.75) + 0.35) * upkeep,
       moveCost: 0.55 * mass,
-      biteRate: 11 * Math.pow(mass, 0.7),
+      // Food units it can swallow per second.
+      biteRate: 22 * Math.pow(mass, 0.7),
+      // Stomach: holds food until digested. Sized with metabolism so small and
+      // big creatures can both keep up; digests a fixed share of it per second.
+      stomachCap: 40 * (Math.pow(mass, 0.75) + 0.35),
+      digestRate: 0.06,
       plantEff,
       // How much of the 8 surrounding tiles a big body can feed from in place.
       footprint: clamp((s - 0.8) / 1.0, 0, 1),
       // Digestive efficiency per plant food: specializing in one costs the others.
       eat: {
-        grass: plantEff * (1 - 0.8 * g.feeding) * grassMouth,
-        leaves: plantEff * (0.1 + 0.9 * g.feeding) * reach,
+        // A water-adapted body is poor at digesting land plants.
+        grass: plantEff * (1 - 0.8 * g.feeding) * grassMouth * (1 - 0.6 * g.swim),
+        leaves: plantEff * (0.1 + 0.9 * g.feeding) * reach * (1 - 0.6 * g.swim),
         algae: plantEff * (0.05 + 0.95 * g.swim),
       },
       meatEff: Math.pow(g.diet, 1.1),

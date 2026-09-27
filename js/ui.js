@@ -314,10 +314,15 @@
         <ul>
           <li><b>Energy</b>: everything costs energy. Resting cost grows with mass<sup>0.75</sup> (Kleiber's law);
           moving costs mass × speed². Expensive genes (muscle, senses, armor) raise upkeep.</li>
+          <li><b>Calories</b>: food is worth different amounts per bite — meat ${Evo.K.CAL.meat}, water plants ${Evo.K.CAL.algae},
+          grass ${Evo.K.CAL.grass}, tree leaves ${Evo.K.CAL.leaves}. Food fills the <b>stomach</b> and is digested into energy
+          over time, so a predator can gorge on one kill and rest for a long while, but plant-eaters must keep grazing.</li>
+          <li><b>Hunger</b>: a creature only looks for food when its energy drops below its <b>Appetite</b> gene, and
+          stops once it is full. A full predator ignores prey.</li>
           <li><b>Food</b>: three kinds of plants regrow (faster in summer): <b>grass</b> on open land, <b>tree leaves</b>
           in forests, and <b>water plants</b> in the shallows. Dead creatures leave meat that rots.</li>
           <li><b>Niches</b>: small-mouthed <b>grazers</b> eat grass; big <b>browsers</b> reach tree leaves
-          (the Browsing gene); <b>swimmers</b> feed in water and can cross deep water. Being good at one food makes
+          (the Browsing gene); <b>swimmers</b> feed in water, can cross deep water, and dry out on land, so they stay near (and flee into) water. Being good at one food makes
           a creature worse at the others, so plant-eaters can split into specialists that live side by side.</li>
           <li><b>Diet</b> is a sliding scale: good at digesting meat means bad at plants, and vice-versa.</li>
           <li><b>Breeding</b>: adults with enough energy look for a mate with similar DNA <i>and</i> a similar color;
@@ -383,7 +388,7 @@
       const p = c.phen;
       const bar = (label, v, max, color, num) =>
         `<div class="label">${label}</div><div class="bar"><span style="width:${Evo.clamp((v / max) * 100, 0, 100)}%;background:${color}"></span></div><div class="num">${num}</div>`;
-      const status = c.alive ? esc(c.state) : `💀 Died (${esc(c.deathCause || 'unknown')})`;
+      const status = c.alive ? `${esc(c.state)} · ${c.hungry ? '😋 hungry' : '😌 not hungry'}` : `💀 Died (${esc(c.deathCause || 'unknown')})`;
       const genes = Evo.GENES.filter((g) => !g.neutral).map((g) => {
         const v = c.g[g.key];
         return bar(esc(g.label), v - g.min, g.max - g.min, 'var(--accent)', fmt(v, g.max > 10 ? 0 : 2));
@@ -398,6 +403,7 @@
           ${bar('Health', c.health, p.maxHealth, '#199e70', fmt(Math.max(0, c.health)))}
           ${bar('Energy', c.energy, p.maxEnergy, '#c98500', fmt(c.energy))}
           ${bar('Stamina', c.stamina, p.maxStamina, '#3987e5', fmt(c.stamina, 1))}
+          ${bar('Stomach', c.stomach, p.stomachCap, '#8a6d3b', fmt((100 * c.stomach) / p.stomachCap) + '%')}
         </div>
         <div class="kv">
           <span class="k">Age</span><span>${fmt(c.age)}s / ${fmt(c.g.lifespan)}s</span>
@@ -408,6 +414,8 @@
           <span class="k">Digests grass · leaves</span><span>${fmt(p.eat.grass * 100)}% · ${fmt(p.eat.leaves * 100)}%</span>
           <span class="k">Water plants · meat</span><span>${fmt(p.eat.algae * 100)}% · ${fmt(p.meatEff * 100)}%</span>
           <span class="k">Upkeep</span><span>${fmt(p.basal, 2)} energy/s</span>
+          <span class="k">Gets hungry below</span><span>${fmt(c.g.appetite * 100)}% energy</span>
+          <span class="k">Meal in stomach</span><span>${fmt(c.stomachCal)} calories</span>
         </div>
         <p class="muted small" style="margin:8px 0 0">DNA</p>
         <div class="bars">${genes}</div>
