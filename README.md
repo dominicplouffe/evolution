@@ -37,15 +37,23 @@ starting populations, plant growth, mutation rate, seasons and more.
   plant food that regrows (faster in summer). With **wrap
   edges** on, the map is a torus: no borders, you can scroll forever.
 - **DNA** (`js/genome.js`): size, muscle, stamina, senses, diet (0 = plants,
-  1 = meat), browsing (grass vs. tree leaves), swimming, aggression, fear, armor,
+  1 = meat), browsing (grass vs. tree leaves), swimming, appetite, aggression, fear, armor,
   camouflage, herding, litter size, maturity age, lifespan, mutation rate (itself
   evolvable), and a neutral color gene.
 - **Plant food & niches**: tiles grow three foods: grass (open land), tree leaves
   (forests) and water plants (shallows and deep water). Small grazers crop grass
   best; leaves need the Browsing gene *and* a big body to reach; swimmers feed in
   water and can cross deep water (swimming ≥ 0.5). Big bodies also feed from the
-  surrounding tiles. Specializing costs efficiency on the other foods, so plant
+  surrounding tiles. Swimmers digest land plants poorly, are clumsy and dry out
+  on land, so they stay in (and flee into) the water. Specializing costs
+  efficiency on the other foods, so plant
   eaters can split into grazer, browser and swimmer species that coexist.
+- **Calories & digestion**: each food has a calorie value per bite (meat 4,
+  water plants 1.1, grass 1, tree leaves 0.8). Food fills a stomach (sized with
+  metabolism) and is digested into energy over time. A creature only looks for
+  food when its energy drops below its **Appetite** gene and stops when full, so
+  predators gorge on a kill and then rest for a long time while plant-eaters
+  graze most of the day.
 - **Body from DNA**: mass = size³. Bigger means more health, strength and fat
   storage, but slower and hungrier. Resting cost scales with mass^0.75 (Kleiber's
   law), movement costs mass × speed². Every "good" gene has an upkeep cost.

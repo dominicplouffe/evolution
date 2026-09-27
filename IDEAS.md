@@ -7,7 +7,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 ## Already in v1
 
 - Configurable map size, water level, and wrap-around edges (a torus, so no borders)
-- 16 evolvable genes plus a neutral color gene; mutation rate is itself a gene
+- 17 evolvable genes plus a neutral color gene; mutation rate is itself a gene
 - Size/mass trade-offs based on real scaling laws (Kleiber's law, strength ~ mass^0.67)
 - Herbivores, omnivores and carnivores on one diet slider, with a digestion trade-off
 - Fleeing, hunting, fighting back, scavenging, herding, resting, stamina and sprinting
@@ -15,6 +15,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - Speciation with generated names, extinction tracking, and an event log
 - Reproductive isolation (mates must look alike and be genetically close)
 - Three plant foods (grass, tree leaves, water plants), so herbivores can split into grazers, browsers and swimmers
+- Calories per food (meat is dense, plants are bulky), a stomach that digests over time, and an evolvable Appetite (hunger threshold)
 - Seasons, carcasses that rot, camouflage that works best in forests
 - God tools: drop creatures, grow food, smite, clone a creature
 

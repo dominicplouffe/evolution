@@ -4,11 +4,11 @@
   'use strict';
 
   const HERBIVORE = {
-    size: 1, speed: 1, stamina: 1, sense: 1, diet: 0.05, feeding: 0.25, swim: 0.05, aggression: 0.15, fear: 0.7,
+    size: 1, speed: 1, stamina: 1, sense: 1, diet: 0.05, feeding: 0.25, swim: 0.05, appetite: 0.85, aggression: 0.15, fear: 0.7,
     armor: 0.05, camo: 0.1, social: 0.5, litter: 2, maturity: 25, lifespan: 150, mutation: 0.1, hue: 50,
   };
   const CARNIVORE = {
-    size: 1.15, speed: 1.4, stamina: 1.2, sense: 1.6, diet: 0.9, feeding: 0.3, swim: 0.1, aggression: 0.75, fear: 0.2,
+    size: 1.15, speed: 1.4, stamina: 1.2, sense: 1.6, diet: 0.9, feeding: 0.3, swim: 0.1, appetite: 0.55, aggression: 0.75, fear: 0.2,
     armor: 0.05, camo: 0.2, social: 0.15, litter: 1.6, maturity: 20, lifespan: 200, mutation: 0.1, hue: 0,
   };
 
@@ -79,7 +79,11 @@
     }
 
     reproduce(mother, father) {
-      if (this.creatures.length + this.pending.length >= this.cfg.maxPopulation) {
+      // At the population cap, only the (rare) predators may still breed, a
+      // little past it, so a plant-eater boom can't lock them out entirely.
+      const pop = this.creatures.length + this.pending.length;
+      const cap = this.cfg.maxPopulation;
+      if (pop >= cap && (mother.g.diet < 0.5 || pop >= cap * 1.1)) {
         mother.reproCooldown = 5;
         return;
       }
@@ -132,7 +136,8 @@
       c.deathCause = cause;
       this.stats.deaths++;
       this.stats.causes[cause] = (this.stats.causes[cause] || 0) + 1;
-      this.world.addCorpse(c.x, c.y, c.phen.mass * Evo.K.MEAT_PER_MASS + Math.max(0, c.energy) * 0.5);
+      // Meat from the body, plus some of its fat reserves.
+      this.world.addCorpse(c.x, c.y, c.phen.mass * Evo.K.MEAT_PER_MASS + (Math.max(0, c.energy) * 0.5) / Evo.K.CAL.meat);
     }
 
     flush() {

@@ -169,7 +169,7 @@
         for (const c of w.corpses) {
           const x = c.x + ox, y = c.y + oy;
           if (x < vx0 - 20 || x > vx1 + 20 || y < vy0 - 20 || y > vy1 + 20) continue;
-          const r = 2 + 4 * Math.sqrt(c.energy / 100);
+          const r = 2 + 4 * Math.sqrt(c.meat / 25);
           if (detailed) {
             ctx.beginPath();
             ctx.moveTo(x - r, y - r); ctx.lineTo(x + r, y + r);

@@ -31,7 +31,10 @@
     DT: 1 / 30,            // fixed simulation step (seconds)
     PLANT_MAX: 5,          // plant energy on a fully fertile tile
     PLANT_REGROW: 0.08,    // plant energy/sec per tile at fertility 1
-    MEAT_PER_MASS: 70,     // corpse energy per unit of body mass
+    // Calories per unit of food eaten. Meat is dense; plants are bulky, so
+    // plant-eaters must fill their stomach far more often.
+    CAL: { grass: 1, leaves: 0.8, algae: 1.1, meat: 4 },
+    MEAT_PER_MASS: 18,     // units of meat in a carcass per unit of body mass
     CORPSE_DECAY: 0.025,   // fraction of a corpse that rots per second
     SPECIES_THRESHOLD: 0.17, // genetic distance that founds a new species
     MATE_THRESHOLD: 0.12,  // max genetic distance for two creatures to mate
