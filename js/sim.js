@@ -152,6 +152,7 @@
       this.time += dt;
       this.world.step(dt, this.time);
       this.hash.rebuild(this.creatures);
+      for (let i = 0; i < this.creatures.length; i++) this.creatures[i].updateStealth(this.world);
       for (let i = 0; i < this.creatures.length; i++) {
         const c = this.creatures[i];
         if (c.alive) c.update(dt, this);

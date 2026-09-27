@@ -391,17 +391,25 @@
     }
 
     readSettings() {
+      const adjusted = [];
       for (const f of Evo.CONFIG_SCHEMA) {
         const el = $('#cfg_' + f.key);
         if (!el) continue;
         if (f.type === 'bool') this.cfg[f.key] = el.checked;
         else {
-          let v = Number(el.value);
-          if (!Number.isFinite(v)) v = f.def;
+          const typed = Number(el.value);
+          let v = Number.isFinite(typed) ? typed : f.def;
           v = Evo.clamp(v, f.min, f.max);
-          this.cfg[f.key] = f.type === 'int' ? Math.round(v) : v;
+          if (f.type === 'int') v = Math.round(v);
+          this.cfg[f.key] = v;
+          // Show the value actually used, and say so, instead of silently changing it.
+          if (v !== typed) {
+            el.value = v;
+            adjusted.push(`${f.label.replace(/ \(.*\)$/, '')}: ${v} (allowed ${f.min}–${f.max})`);
+          }
         }
       }
+      if (adjusted.length) this.toast('Adjusted to the allowed range: ' + adjusted.join(', '));
       saveSettings(this.cfg);
     }
 

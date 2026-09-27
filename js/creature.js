@@ -17,6 +17,8 @@
   };
 
   let nextId = 1;
+  const PATCH_TILE = new Int32Array(9);
+  const PATCH_W = new Float32Array(9);
 
   function angleDiff(a, b) {
     let d = b - a;
@@ -64,6 +66,7 @@
       this.thinkTimer = sim.rng.float(0, 0.3);
       this.wanderTurn = 0;
       this.herdSize = 0;
+      this.stealth = 1;
       this.home = null;
       this.chasedBy = null;
       this.sprinting = false;
@@ -94,9 +97,14 @@
     }
 
     // How far away can I spot `o`? Camouflage works best under cover.
-    detectRange(o, world) {
-      const cover = world.biomeAt(o.x, o.y).cover;
-      return this.phen.senseRadius * (1 - o.g.camo * (0.3 + 0.5 * cover)) * o.phen.visibility;
+    // (o.stealth is refreshed once per step from the ground it stands on.)
+    detectRange(o) {
+      return this.phen.senseRadius * o.stealth;
+    }
+
+    updateStealth(world) {
+      const cover = world.biomeAt(this.x, this.y).cover;
+      this.stealth = (1 - this.g.camo * (0.3 + 0.5 * cover)) * this.phen.visibility;
     }
 
     think(sim) {
@@ -119,7 +127,7 @@
       sim.hash.query(this.x, this.y, sense, (o, dx, dy, d2) => {
         if (o === this || !o.alive) return;
         const d = Math.sqrt(d2) || 0.01;
-        if (d > this.detectRange(o, world)) return;
+        if (d > this.detectRange(o)) return;
         // Only a hunting predator is scary from afar; an idle one only up close.
         if (this.isThreat(o) && d < (o.state === STATE.HUNT ? fleeDist : fleeDist * 0.3)) {
           // Weight by closeness and by how outmatched I am.
@@ -340,10 +348,12 @@
     }
 
     // The tiles I can feed from without moving: my own tile, plus (for big
-    // bodies) the neighbouring ones. Returns [tileIndex, weight] pairs.
+    // bodies) the neighbouring ones. Fills the shared PATCH_TILE/PATCH_W
+    // buffers (no allocation, it runs every frame) and returns the count.
     patchTiles(world) {
+      let n = 0;
       const here = world.tileIndex(this.x, this.y);
-      const out = here >= 0 ? [[here, 1]] : [];
+      if (here >= 0) { PATCH_TILE[n] = here; PATCH_W[n++] = 1; }
       const w = this.phen.footprint;
       if (w > 0) {
         const T = Evo.K.TILE;
@@ -351,16 +361,17 @@
           for (let dx = -1; dx <= 1; dx++) {
             if (!dx && !dy) continue;
             const ti = world.tileIndex(this.x + dx * T, this.y + dy * T);
-            if (ti >= 0 && ti !== here) out.push([ti, w * (dx && dy ? 0.7 : 1)]);
+            if (ti >= 0 && ti !== here) { PATCH_TILE[n] = ti; PATCH_W[n++] = w * (dx && dy ? 0.7 : 1); }
           }
         }
       }
-      return out;
+      return n;
     }
 
     patchValue(world) {
+      const n = this.patchTiles(world);
       let v = 0;
-      for (const [ti, w] of this.patchTiles(world)) v += w * world.foodValue(ti, this.phen.eat);
+      for (let k = 0; k < n; k++) v += PATCH_W[k] * world.foodValue(PATCH_TILE[k], this.phen.eat);
       return v;
     }
 
@@ -438,6 +449,9 @@
       if (this.health <= 0) sim.kill(this, this.deathCause || 'wounds');
     }
 
+    distTo(world, o) { return Math.hypot(world.dx(this.x, o.x), world.dy(this.y, o.y)); }
+    headTo(world, o) { return Math.atan2(world.dy(this.y, o.y), world.dx(this.x, o.x)); }
+
     // Turn intentions into a desired heading/speed and perform interactions.
     act(dt, sim) {
       const world = sim.world;
@@ -447,8 +461,6 @@
       let wantSpeed = cruise;
       let sprint = false;
       const t = this.target;
-      const distTo = (o) => Math.hypot(world.dx(this.x, o.x), world.dy(this.y, o.y));
-      const headTo = (o) => Math.atan2(world.dy(this.y, o.y), world.dx(this.x, o.x));
 
       switch (this.state) {
         case STATE.FLEE:
@@ -458,19 +470,19 @@
 
         case STATE.HUNT:
         case STATE.FIGHT: {
-          if (!t || !t.alive || distTo(t) > p.senseRadius * 1.4 || (this.state === STATE.HUNT && this.chaseTime > 10)) {
+          if (!t || !t.alive || this.distTo(world, t) > p.senseRadius * 1.4 || (this.state === STATE.HUNT && this.chaseTime > 10)) {
             if (this.state === STATE.HUNT) this.huntCooldown = 4;
             this.state = STATE.WANDER;
             this.target = null;
             break;
           }
           this.chaseTime += dt;
-          const d = distTo(t);
+          const d = this.distTo(world, t);
           // Lead the target a little.
           const lead = Math.min(1, d / (p.maxSpeed + 1));
           const px = t.x + Math.cos(t.heading) * t.v * lead;
           const py = t.y + Math.sin(t.heading) * t.v * lead;
-          wantHeading = headTo({ x: px, y: py });
+          wantHeading = this.headTo(world, { x: px, y: py });
           sprint = d < p.senseRadius * 0.8;
           const reach = p.radius + t.phen.radius + 3;
           if (d < reach) {
@@ -483,8 +495,8 @@
 
         case STATE.SCAVENGE: {
           if (!t || t.meat <= 0.2) { this.state = STATE.WANDER; this.target = null; break; }
-          const d = distTo(t);
-          wantHeading = headTo(t);
+          const d = this.distTo(world, t);
+          wantHeading = this.headTo(world, t);
           if (d < p.radius + 5) {
             wantSpeed = 0;
             const bite = Math.min(p.biteRate * 1.5 * dt, t.meat);
@@ -496,9 +508,8 @@
 
         case STATE.EAT: {
           wantSpeed = 0;
-          const patch = this.patchTiles(world);
-          let value = 0;
-          for (const [ti, w] of patch) value += w * world.foodValue(ti, p.eat);
+          const value = this.patchValue(world);
+          const n = this.patchTiles(world);
           if (value < 0.4 || this.isFull()) {
             this.state = this.isFull() ? STATE.DIGEST : STATE.WANDER;
             this.thinkTimer = 0;
@@ -508,7 +519,8 @@
           // across food types in proportion to the calories each is worth to me.
           const dens = value / Evo.K.PLANT_MAX;
           const mouthful = p.biteRate * dt * (dens / (dens + 0.25)) * 1.25;
-          for (const [ti, w] of patch) {
+          for (let k = 0; k < n; k++) {
+            const ti = PATCH_TILE[k], w = PATCH_W[k];
             for (const f of Evo.FOODS) {
               const eff = p.eat[f.key];
               const layer = world.food[f.key];
@@ -523,9 +535,9 @@
 
         case STATE.GRAZE: {
           if (!t) { this.state = STATE.WANDER; break; }
-          wantHeading = headTo(t);
+          wantHeading = this.headTo(world, t);
           const i = world.tileIndex(this.x, this.y);
-          if (distTo(t) < Evo.K.TILE * 0.6 || (i >= 0 && world.foodValue(i, p.eat) > Evo.K.PLANT_MAX * 0.7)) {
+          if (this.distTo(world, t) < Evo.K.TILE * 0.6 || (i >= 0 && world.foodValue(i, p.eat) > Evo.K.PLANT_MAX * 0.7)) {
             this.state = STATE.EAT;
             this.target = null;
           }
@@ -534,8 +546,8 @@
 
         case STATE.MATE: {
           if (!t || !t.alive || !this.isReadyToMate() || !t.isReadyToMate()) { this.state = STATE.WANDER; this.target = null; break; }
-          wantHeading = headTo(t);
-          if (distTo(t) < p.radius + t.phen.radius + 4) {
+          wantHeading = this.headTo(world, t);
+          if (this.distTo(world, t) < p.radius + t.phen.radius + 4) {
             sim.reproduce(this, t);
             this.state = STATE.WANDER;
             this.target = null;
@@ -550,8 +562,8 @@
 
         default: // WANDER
           if (this.home) {
-            wantHeading = headTo(this.home);
-            if (distTo(this.home) < Evo.K.TILE) this.home = null;
+            wantHeading = this.headTo(world, this.home);
+            if (this.distTo(world, this.home) < Evo.K.TILE) this.home = null;
           } else wantHeading = this.heading + this.wanderTurn * dt * 2;
           wantSpeed = cruise * 0.7;
       }
@@ -593,7 +605,10 @@
       const ny = this.y + Math.sin(this.heading) * step;
       if (!world.canEnter(nx, ny, this.g.swim)) {
         // Bump into water/wall: turn away.
-        this.heading += Math.PI * (0.5 + Math.random() * 0.5) * (Math.random() < 0.5 ? -1 : 1);
+        // Per-creature seeded randomness, so a given seed always replays the same world.
+        this.bump = (Math.imul(this.bump || this.id * 2654435761, 1664525) + 1013904223) >>> 0;
+        const r = this.bump / 4294967296;
+        this.heading += Math.PI * (0.5 + (r % 0.5)) * (r < 0.5 ? -1 : 1);
         this.v *= 0.3;
         if (this.state === STATE.GRAZE) this.state = STATE.WANDER;
         return;

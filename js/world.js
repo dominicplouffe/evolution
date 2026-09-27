@@ -45,6 +45,7 @@
       const w = this.world;
       const c = this.cell;
       const r2 = r * r;
+      const wrap = w.wrap, W = w.width, H = w.height, hw = W / 2, hh = H / 2;
       const x0 = Math.floor((x - r) / c), x1 = Math.floor((x + r) / c);
       const y0 = Math.floor((y - r) / c), y1 = Math.floor((y + r) / c);
       const maxX = Math.min(x1, x0 + this.cols - 1), maxY = Math.min(y1, y0 + this.rows - 1);
@@ -63,7 +64,12 @@
           const b = this.buckets[ry * this.cols + rx];
           for (let i = 0; i < b.length; i++) {
             const it = b[i];
-            const dx = w.dx(x, it.x), dy = w.dy(y, it.y);
+            // Wrap-aware delta, inlined: this loop is the hottest in the game.
+            let dx = it.x - x, dy = it.y - y;
+            if (wrap) {
+              if (dx > hw) dx -= W; else if (dx < -hw) dx += W;
+              if (dy > hh) dy -= H; else if (dy < -hh) dy += H;
+            }
             const d2 = dx * dx + dy * dy;
             if (d2 <= r2) fn(it, dx, dy, d2);
           }
