@@ -15,6 +15,7 @@
     { key: 'seasonStrength', label: 'Season strength', type: 'float', min: 0, max: 0.9, step: 0.05, def: 0.3 },
     { key: 'seasonLength', label: 'Year length (s)', type: 'int', min: 30, max: 2000, def: 240 },
     { key: 'maxPopulation', label: 'Population cap (big = slower)', type: 'int', min: 50, max: 20000, def: 1500 },
+    { key: 'neuralBrains', label: 'Evolving brains (off = fixed rules)', type: 'bool', def: true },
     { key: 'migration', label: 'Migrants replace extinct groups', type: 'bool', def: true },
     { key: 'allowAsexual', label: 'Allow asexual fallback', type: 'bool', def: true },
   ];

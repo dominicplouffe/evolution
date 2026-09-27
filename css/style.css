@@ -82,6 +82,7 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 
 .bars { display: grid; grid-template-columns: 90px 1fr 44px; gap: 3px 6px; align-items: center; margin: 8px 0; }
 .bars .label { color: var(--text-2); font-size: 12px; }
+.bars .label.chosen { color: var(--text); font-weight: 600; }
 .bars .num { text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; }
 .bar { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }

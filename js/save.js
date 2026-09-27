@@ -31,6 +31,13 @@
     return new Type(bytes.buffer);
   }
 
+  // Brains are stored as compact base64 (Brain.from() reads them back).
+  function packGenome(g) {
+    const o = Object.assign({}, g);
+    if (g.brain) o.brain = Evo.Brain.encode(g.brain);
+    return o;
+  }
+
   function serialize(sim) {
     const w = sim.world;
     const food = {};
@@ -46,7 +53,7 @@
       nextCreatureId: Evo.Creature.getNextId(),
       world: { biome: toB64(w.biome), fertility: toB64(w.fertility), food, corpses: w.corpses },
       creatures: sim.creatures.filter((c) => c.alive).map((c) => {
-        const o = { g: c.g, state: KEEP_STATES.has(c.state) ? c.state : 'Wandering' };
+        const o = { g: packGenome(c.g), state: KEEP_STATES.has(c.state) ? c.state : 'Wandering' };
         for (const k of CREATURE_FIELDS) o[k] = c[k];
         return o;
       }),
@@ -55,6 +62,8 @@
         list: [...sim.species.byId.values()].map((sp) => {
           const o = Object.assign({}, sp);
           delete o._sum;
+          o.founder = packGenome(sp.founder);
+          o.centroid = packGenome(sp.centroid);
           return o;
         }),
         herbivore: sim.herbivoreSpecies.id,

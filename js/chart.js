@@ -22,6 +22,7 @@
           { name: 'Swimmers', color: C.main, get: (h) => (h.niches ? h.niches.swimmer : 0) },
         ],
       },
+      { id: 'brains', label: 'Brain drift from founders', series: [{ name: 'Avg brain drift', color: C.main, get: (h) => h.brainDrift || 0, digits: 2 }] },
       { id: 'total', label: 'Total population', series: [{ name: 'Creatures', color: C.main, get: (h) => h.n }] },
       { id: 'species', label: 'Living species', series: [{ name: 'Species', color: C.main, get: (h) => h.species }] },
       { id: 'plants', label: 'Plant food per tile', series: [{ name: 'Plants', color: C.herb, get: (h) => h.plants, digits: 2 }] },

@@ -17,6 +17,7 @@
   };
 
   let nextId = 1;
+  const SENSES = new Float64Array(Evo.Brain ? Evo.Brain.NI : 17); // reused every think
   const PATCH_TILE = new Int32Array(9);
   const PATCH_W = new Float32Array(9);
 
@@ -113,7 +114,7 @@
       const sense = p.senseRadius;
 
       // ---- scan surroundings
-      let fx = 0, fy = 0, threats = 0;
+      let fx = 0, fy = 0, threats = 0, nearestThreat = 0;
       let mate = null, mateD = Infinity;
       let prey = null, preyScore = 0;
       let herdX = 0, herdY = 0, herdHX = 0, herdHY = 0, herdN = 0;
@@ -135,6 +136,7 @@
           fx -= (dx / d) * w;
           fy -= (dy / d) * w;
           threats++;
+          if (!nearestThreat || d < nearestThreat) nearestThreat = d;
         }
         if (o.species === this.species) {
           herdX += dx; herdY += dy;
@@ -155,72 +157,32 @@
       });
 
       this.herdSize = herdN;
-
-      // ---- 1. flee
-      if (threats > 0 && (fx !== 0 || fy !== 0)) {
-        this.state = STATE.FLEE;
-        this.fleeX = fx; this.fleeY = fy;
-        // Swimmers bolt for the water, where land predators are slow.
-        if (g.swim >= 0.5) {
-          const home = this.findHome(world, sim.rng);
-          if (home) {
-            const hx = world.dx(this.x, home.x), hy = world.dy(this.y, home.y);
-            const hd = Math.hypot(hx, hy) || 1, fd = Math.hypot(fx, fy) || 1;
-            this.fleeX = fx / fd + (1.5 * hx) / hd;
-            this.fleeY = fy / fd + (1.5 * hy) / hd;
-          }
-        }
-        this.target = null;
-        return;
-      }
-
-      // ---- 2. fight back (or run from) whoever is biting me
       const att = this.lastAttacker;
-      if (att && att.alive && sim.time - this.lastAttackedAt < 2) {
-        if (g.aggression > 0.5 && p.strength > att.phen.strength * 0.6) {
-          this.setTarget(STATE.FIGHT, att, 'creature');
-        } else {
-          this.state = STATE.FLEE;
-          this.fleeX = -world.dx(this.x, att.x);
-          this.fleeY = -world.dy(this.y, att.y);
+      const attacked = !!(att && att.alive && sim.time - this.lastAttackedAt < 2);
+
+      // Commitments: keep chasing current prey, or keep walking to the chosen
+      // plant patch, unless something urgent (danger, a mate) comes up.
+      if (!threats && !attacked && !mate) {
+        if (this.state === STATE.HUNT && this.target && this.target.alive && this.chaseTime < 10) return;
+        if (hungry && this.state === STATE.GRAZE && this.target) {
+          const ti = world.tileIndex(this.target.x, this.target.y);
+          if (ti >= 0 && world.foodValue(ti, p.eat) > 1) return;
         }
-        return;
       }
 
-      // Keep chasing a current prey rather than re-deciding every think.
-      if (this.state === STATE.HUNT && this.target && this.target.alive && this.chaseTime < 10) return;
-
-      // ---- 3. mate
-      if (mate) {
-        this.setTarget(STATE.MATE, mate, 'creature');
-        this.mateSearch = 0;
-        return;
-      }
-
-      // ---- 4. food
-      // Keep walking to the chosen patch instead of re-deciding every think.
-      if (hungry && this.state === STATE.GRAZE && this.target) {
-        const ti = world.tileIndex(this.target.x, this.target.y);
-        if (ti >= 0 && world.foodValue(ti, p.eat) > 1) return;
-      }
+      // ---- gather the options (only look for food when hungry)
+      let corpse = null, corpseScore = 0, hereScore = 0, tile = null, tileScore = 0;
       if (hungry) {
-        let best = null, bestScore = 0, bestKind = null, bestState = null;
-        if (prey) { best = prey; bestScore = preyScore * 0.8; bestKind = 'creature'; bestState = STATE.HUNT; }
-
         if (p.meatEff > 0.15) {
           world.corpseHash.query(this.x, this.y, sense, (c, dx, dy, d2) => {
-            const s = (Math.min(c.meat * Evo.K.CAL.meat, p.maxEnergy) * p.meatEff) / (Math.sqrt(d2) + 30);
-            if (s > bestScore) { bestScore = s; best = c; bestKind = 'corpse'; bestState = STATE.SCAVENGE; }
+            const sc = (Math.min(c.meat * Evo.K.CAL.meat, p.maxEnergy) * p.meatEff) / (Math.sqrt(d2) + 30);
+            if (sc > corpseScore) { corpseScore = sc; corpse = c; }
           });
         }
-
         if (p.plantEff > 0.1) {
           const here = world.tileIndex(this.x, this.y);
           const hereValue = here >= 0 ? this.patchValue(world) : 0;
-          if (hereValue > 1.5) {
-            const s = hereValue / 20;
-            if (s > bestScore) { bestScore = s; best = null; bestKind = 'here'; bestState = STATE.EAT; }
-          }
+          if (hereValue > 1.5) hereScore = hereValue / 20;
           // Check the 8 neighbouring tiles, then sample a handful of tiles in
           // view (scanning all of them would be too slow).
           const T = Evo.K.TILE;
@@ -239,49 +201,114 @@
             }
             const ti = world.tileIndex(tx, ty);
             if (ti < 0 || !world.canEnter(tx, ty, g.swim)) continue;
-            let s = world.foodValue(ti, p.eat) / (r + 15);
+            let sc = world.foodValue(ti, p.eat) / (r + 15);
             // Prefer feeding in my own habitat.
             const wet = !!Evo.BIOMES[world.biome[ti]].water;
-            if (g.swim >= 0.5 && !wet) s *= 0.35;
-            else if (g.swim < 0.3 && wet) s *= 0.5;
-            if (s > bestScore) {
-              bestScore = s;
-              best = { x: tx, y: ty };
-              bestKind = 'tile';
-              bestState = STATE.GRAZE;
-            }
+            if (g.swim >= 0.5 && !wet) sc *= 0.35;
+            else if (g.swim < 0.3 && wet) sc *= 0.5;
+            if (sc > tileScore) { tileScore = sc; tile = { x: tx, y: ty }; }
           }
         }
+      }
+      const home = this.findHome(world, sim.rng);
+      const canWin = attacked && g.aggression > 0.5 && p.strength > att.phen.strength * 0.6;
 
-        if (bestKind === 'here') {
+      // ---- senses -> brain -> action scores
+      const B = Evo.Brain, I = B.I, A = B.A;
+      const norm = (v) => v / (v + 0.2);
+      const x = SENSES;
+      x[I.bias] = 1;
+      x[I.hungry] = hungry ? 1 : 0;
+      x[I.energy] = Math.min(1, (this.energy + this.stomachCal) / p.maxEnergy);
+      x[I.health] = this.health / p.maxHealth;
+      x[I.stamina] = this.stamina / p.maxStamina;
+      x[I.stomach] = this.stomach / p.stomachCap;
+      x[I.threat] = attacked ? 1 : Math.min(1, nearestThreat > 0 ? 1 - nearestThreat / fleeDist : 0);
+      x[I.attacked] = attacked ? 1 : 0;
+      x[I.canWin] = canWin ? 1 : 0;
+      x[I.readyToMate] = ready ? 1 : 0;
+      x[I.mateNearby] = mate ? 1 : 0;
+      x[I.prey] = prey ? norm(preyScore) : 0;
+      x[I.carrion] = corpse ? norm(corpseScore) : 0;
+      x[I.plantsHere] = hereScore ? norm(hereScore) : 0;
+      x[I.plantsNearby] = tile ? norm(tileScore) : 0;
+      x[I.herd] = Math.min(herdN, 6) / 6;
+      x[I.homesick] = home ? 1 : 0;
+
+      const util = this.util || (this.util = new Float32Array(B.NA));
+      B.run(sim.cfg.neuralBrains ? g.brain : B.DEFAULT, x, util);
+      const avail = this.avail || (this.avail = new Uint8Array(B.NA));
+      avail[A.flee] = threats > 0 || attacked ? 1 : 0;
+      avail[A.fight] = attacked ? 1 : 0;
+      avail[A.mate] = mate ? 1 : 0;
+      avail[A.eat] = hereScore > 0 ? 1 : 0;
+      avail[A.graze] = tile ? 1 : 0;
+      avail[A.scavenge] = corpse ? 1 : 0;
+      avail[A.hunt] = prey ? 1 : 0;
+      avail[A.home] = home ? 1 : 0;
+      avail[A.rest] = 1;
+      avail[A.wander] = 1;
+      let choice = A.wander, best = -Infinity;
+      for (let a = 0; a < B.NA; a++) {
+        if (!avail[a]) continue;
+        const u = util[a] + sim.rng.gauss() * 0.08; // a little indecision
+        if (u > best) { best = u; choice = a; }
+      }
+      this.choice = choice;
+
+      // ---- carry out the chosen action
+      this.home = null;
+      switch (B.ACTIONS[choice]) {
+        case 'flee':
+          this.state = STATE.FLEE;
+          this.target = null;
+          if (threats > 0) {
+            this.fleeX = fx; this.fleeY = fy;
+          } else {
+            this.fleeX = -world.dx(this.x, att.x);
+            this.fleeY = -world.dy(this.y, att.y);
+          }
+          // Swimmers bolt for the water, where land predators are slow.
+          if (g.swim >= 0.5 && home) {
+            const hx = world.dx(this.x, home.x), hy = world.dy(this.y, home.y);
+            const hd = Math.hypot(hx, hy) || 1, fd = Math.hypot(this.fleeX, this.fleeY) || 1;
+            this.fleeX = this.fleeX / fd + (1.5 * hx) / hd;
+            this.fleeY = this.fleeY / fd + (1.5 * hy) / hd;
+          }
+          return;
+        case 'fight':
+          this.setTarget(STATE.FIGHT, att, 'creature');
+          return;
+        case 'mate':
+          this.setTarget(STATE.MATE, mate, 'creature');
+          this.mateSearch = 0;
+          return;
+        case 'eat':
           this.state = STATE.EAT;
           this.target = null;
           return;
-        }
-        if (best) {
-          if (bestState === STATE.HUNT) {
-            if (this.state !== STATE.HUNT) this.chaseTime = 0;
-            best.chasedBy = this;
-          }
-          this.setTarget(bestState, best, bestKind);
+        case 'graze':
+          this.setTarget(STATE.GRAZE, tile, 'tile');
           return;
-        }
+        case 'scavenge':
+          this.setTarget(STATE.SCAVENGE, corpse, 'corpse');
+          return;
+        case 'hunt':
+          if (this.state !== STATE.HUNT) this.chaseTime = 0;
+          prey.chasedBy = this;
+          this.setTarget(STATE.HUNT, prey, 'creature');
+          return;
+        case 'home':
+          this.home = home;
+          this.state = STATE.WANDER;
+          this.target = null;
+          return;
+        case 'rest':
+          this.state = this.stomach > 0.25 * p.stomachCap ? STATE.DIGEST : STATE.REST;
+          this.target = null;
+          return;
       }
-
-      // ---- 5. go home: swimmers return to water, land animals leave it
-      this.home = this.findHome(world, sim.rng);
-      if (this.home) {
-        this.state = STATE.WANDER;
-        this.target = null;
-        return;
-      }
-
-      // ---- 6. rest when full (saves energy), otherwise wander (with herding)
-      if (!hungry && !ready && sim.rng.chance(0.85)) {
-        this.state = this.stomach > 0.25 * p.stomachCap ? STATE.DIGEST : STATE.REST;
-        this.target = null;
-        return;
-      }
+      // wander (with herding)
       this.state = STATE.WANDER;
       this.target = null;
       this.wanderTurn = sim.rng.float(-1.2, 1.2);
@@ -620,6 +647,7 @@
   }
 
   Creature.STATE = STATE;
+  Creature.SENSES = SENSES; // the last senses fed to a brain (for tools and tests)
   // Creature ids keep counting up across save/load.
   Creature.getNextId = () => nextId;
   Creature.setNextId = (n) => { nextId = n; };

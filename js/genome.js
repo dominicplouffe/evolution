@@ -30,10 +30,15 @@
   function makeGenome(base) {
     const g = {};
     for (const gene of GENES) g[gene.key] = base[gene.key] !== undefined ? base[gene.key] : (gene.min + gene.max) / 2;
+    g.brain = Evo.Brain.from(base.brain); // neural-network weights (see brain.js)
     return g;
   }
 
-  function cloneGenome(g) { return Object.assign({}, g); }
+  function cloneGenome(g) {
+    const out = Object.assign({}, g);
+    out.brain = g.brain ? g.brain.slice() : Evo.Brain.from(null);
+    return out;
+  }
 
   function mutate(g, rng, scale) {
     const out = cloneGenome(g);
@@ -46,6 +51,7 @@
         out[gene.key] = clamp(out[gene.key] + rng.gauss() * span * step, gene.min, gene.max);
       }
     }
+    out.brain = Evo.Brain.mutate(g.brain || Evo.Brain.DEFAULT, rng, p);
     return out;
   }
 
@@ -60,6 +66,7 @@
         out[gene.key] = a[gene.key] * t + b[gene.key] * (1 - t);
       }
     }
+    out.brain = Evo.Brain.crossover(a.brain || Evo.Brain.DEFAULT, b.brain || Evo.Brain.DEFAULT, rng);
     return out;
   }
 

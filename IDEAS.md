@@ -20,6 +20,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - Seasons, carcasses that rot, camouflage that works best in forests
 - God tools: drop creatures, grow food, smite, clone a creature
 - Save/load: autosave to the browser, continue on reload, export/import as a file
+- Evolving neural-network brains: DNA-encoded networks score the possible actions; founders start with the classic rules and behaviour evolves from there
 - Counterweights between genes: speed peaks at medium size, heavy bodies accelerate slowly, small bodies hide better, sprinters tire, prey fight back, long life costs upkeep, slow growth gives stronger young
 
 ## Next: small additions
@@ -32,9 +33,6 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 
 ## Medium: richer biology
 
-- **Evolving brains**: replace the hand-written priority list with a small neural
-  network whose weights live in the DNA (this is how The Bibites and evolv.io work).
-  Behaviour itself evolves, and it's a lot more surprising.
 - **Pack hunting and kin recognition**: recognise relatives
   and hunt together.
 - **Sexual selection**: an "ornament" gene and a "pickiness" gene. Flashy creatures

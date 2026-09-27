@@ -237,11 +237,14 @@
         }
       }
       const n = this.creatures.length;
+      let drift = 0;
+      for (const c of this.creatures) drift += Evo.Brain.drift(c.g.brain);
       const avg = {};
       for (const gene of Evo.GENES) avg[gene.key] = n ? sums[gene.key] / n : 0;
       this.stats.peakPopulation = Math.max(this.stats.peakPopulation, n);
       this.history.push({
         t: this.time, n, ...counts, niches,
+        brainDrift: n ? drift / n : 0,
         plants: this.world.totalPlant() / (this.world.cols * this.world.rows),
         species: this.species.living().length,
         avg,

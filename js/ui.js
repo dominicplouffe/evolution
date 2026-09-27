@@ -383,7 +383,7 @@
       form.onchange = () => {
         this.readSettings();
         // Some settings can change on the fly.
-        for (const k of ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration']) {
+        for (const k of ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration', 'neuralBrains']) {
           this.sim.cfg[k] = this.cfg[k];
         }
       };
@@ -437,6 +437,11 @@
           a creature worse at the others, so plant-eaters can split into specialists that live side by side.</li>
           <li><b>Diet</b> is a sliding scale: good at digesting meat means bad at plants, and vice-versa. Omnivores sit
           in between, so plant-eaters can become meat-eaters (and back) one small step at a time.</li>
+          <li><b>Brains</b>: each creature has a small neural network in its DNA. Its senses (hunger, energy,
+          danger, being attacked, a mate nearby, how good the plants, carrion and prey around it are...) go in; out come
+          scores for everything it could do (flee, fight, court, eat, hunt, rest...). It does the best-scoring action.
+          Founders start with the classic rules, then babies inherit a mix of both parents' networks with mutations, so
+          behaviour evolves. Click a creature to see its scores. Turn it off under World settings to compare.</li>
           <li><b>Breeding</b>: adults with enough energy look for a mate with similar DNA;
           if none is found for a while they may reproduce alone.</li>
           <li><b>Species</b>: a baby founds a new species (new name, new colour) when its DNA has drifted far from its
@@ -530,6 +535,7 @@
           <span class="k">Gets hungry below</span><span>${fmt(c.g.appetite * 100)}% energy</span>
           <span class="k">Meal in stomach</span><span>${fmt(c.stomachCal)} calories</span>
         </div>
+        ${this.brainHtml(c)}
         <p class="muted small" style="margin:8px 0 0">DNA</p>
         <div class="bars">${genes}</div>
         <div class="row">
@@ -549,6 +555,26 @@
       if (mode === 'diet') items = [['plants', 'hsl(120,75%,45%)'], ['mixed', 'hsl(60,75%,45%)'], ['meat', 'hsl(0,75%,45%)']];
       el.style.display = items.length ? 'flex' : 'none';
       el.innerHTML = items.map(([k, c]) => `<span><span class="dot" style="background:${c}"></span>${k}</span>`).join('');
+    }
+
+    // What the creature's neural network scored each possible action at its
+    // last decision; the chosen one is highlighted.
+    brainHtml(c) {
+      const B = Evo.Brain;
+      if (!c.util || !c.avail) return '';
+      const rows = [];
+      for (let a = 0; a < B.NA; a++) if (c.avail[a]) rows.push([a, c.util[a]]);
+      rows.sort((x, y) => y[1] - x[1]);
+      const top = Math.max(1, ...rows.map((r) => r[1]));
+      const fixed = !this.sim.cfg.neuralBrains;
+      const bars = rows.map(([a, u]) => {
+        const chosen = a === c.choice;
+        const label = (chosen ? '▶ ' : '') + B.ACTION_LABELS[B.ACTIONS[a]];
+        return `<div class="label${chosen ? ' chosen' : ''}">${esc(label)}</div><div class="bar"><span style="width:${Evo.clamp((u / top) * 100, 0, 100)}%;background:${chosen ? '#c98500' : '#5b6b7e'}"></span></div><div class="num">${fmt(u, 1)}</div>`;
+      }).join('');
+      return `
+        <p class="muted small" style="margin:8px 0 0">Brain · last decision${fixed ? ' (fixed rules)' : ''} · drift from founders ${fmt(B.drift(c.g.brain), 2)}</p>
+        <div class="bars">${bars}</div>`;
     }
 
     toast(msg) {

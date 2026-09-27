@@ -64,9 +64,19 @@ starting populations, plant growth, mutation rate, seasons and more.
   attacker; a longer Lifespan costs upkeep; a longer Maturity gives
   better-developed babies and sturdier adults. Tree leaves need a specialised
   (high Browsing) gut.
-- **Brain** (`js/creature.js`): a priority list — flee predators › fight back ›
-  court a mate › eat (graze / scavenge / hunt) › rest or wander with the herd.
-  Sprinting burns stamina; exhausted creatures can't sprint.
+- **Evolving brains** (`js/brain.js`): every creature carries a small neural
+  network in its DNA (17 senses → 6 hidden neurons → 10 action scores, plus
+  direct connections). Senses include hunger, energy, health, stamina, stomach,
+  danger, being attacked (and whether it can win), a mate nearby, the best
+  plants / carrion / prey around, herd size and being out of its habitat. The
+  creature does the best-scoring action that's possible right now: flee, fight
+  back, court, eat here, go to plants, scavenge, hunt, go home, rest or wander.
+  Founders are wired to reproduce the original rules (flee › fight back › court ›
+  food › home › rest/wander); babies inherit whole neurons from either parent,
+  and mutations make behaviour drift. The inspector shows each creature's
+  scores. **World settings → Evolving brains** turns it off (everyone uses the
+  founder rules) for comparison. Sprinting burns stamina; exhausted creatures
+  can't sprint.
 - **Diet** is a trade-off: digesting meat well means digesting plants badly.
   Predators hunt prey they think they can take; dead creatures leave carcasses
   that rot.
@@ -93,6 +103,7 @@ js/version.js       version label shown in the corner (bump on every change)
 css/style.css       styles
 js/rng.js           seeded RNG + seamless noise
 js/config.js        world settings + simulation constants (tuning knobs)
+js/brain.js         evolving neural-network brains (weights live in the DNA)
 js/genome.js        genes, mutation, crossover, DNA -> body, species
 js/world.js         terrain, plants, carcasses, spatial hash, wrap-around
 js/creature.js      creature state + behaviour
