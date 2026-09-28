@@ -137,7 +137,7 @@
       this.stats.deaths++;
       this.stats.causes[cause] = (this.stats.causes[cause] || 0) + 1;
       // Meat from the body, plus some of its fat reserves.
-      this.world.addCorpse(c.x, c.y, c.phen.mass * Evo.K.MEAT_PER_MASS + (Math.max(0, c.energy) * 0.5) / Evo.K.CAL.meat);
+      this.world.addCorpse(c.x, c.y, c.phen.mass * Evo.K.MEAT_PER_MASS + (Math.max(0, c.energy) * 0.5) / Evo.K.CAL.meat, c.species);
     }
 
     flush() {

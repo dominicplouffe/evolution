@@ -186,7 +186,10 @@
       if (hungry) {
         if (p.meatEff > 0.15) {
           world.corpseHash.query(this.x, this.y, sense, (c, dx, dy, d2) => {
-            const sc = (Math.min(c.meat * Evo.K.CAL.meat, p.maxEnergy) * p.meatEff) / (Math.sqrt(d2) + 30);
+            // My own species' dead are off the menu unless I've evolved cannibalism.
+            const kin = c.species === this.species ? p.kinEff : 1;
+            if (kin <= 0) return;
+            const sc = (Math.min(c.meat * Evo.K.CAL.meat, p.maxEnergy) * p.meatEff * kin) / (Math.sqrt(d2) + 30);
             if (sc > corpseScore) { corpseScore = sc; corpse = c; }
           });
         }
@@ -562,13 +565,14 @@
         }
 
         case STATE.SCAVENGE: {
-          if (!t || t.meat <= 0.2) { this.state = STATE.WANDER; this.target = null; break; }
+          const eff = t && t.species === this.species ? p.meatEff * p.kinEff : p.meatEff;
+          if (!t || t.meat <= 0.2 || eff <= 0) { this.state = STATE.WANDER; this.target = null; break; }
           const d = this.distTo(world, t);
           wantHeading = this.headTo(world, t);
           if (d < p.radius + 5) {
             wantSpeed = 0;
             const bite = Math.min(p.biteRate * 1.5 * dt, t.meat);
-            t.meat -= this.swallow(bite * p.meatEff, Evo.K.CAL.meat) / p.meatEff;
+            t.meat -= this.swallow(bite * eff, Evo.K.CAL.meat) / eff;
             if (this.isFull()) this.state = STATE.DIGEST;
           }
           break;

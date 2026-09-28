@@ -118,7 +118,7 @@
         : { amt: new Float32Array(n), max: new Float32Array(n) };
     }
     if (world.biome.length !== world.cols * world.rows) throw new Error('Save file is damaged (map size mismatch)');
-    world.corpses = (d.world.corpses || []).map((c) => ({ x: c.x, y: c.y, meat: c.meat, initial: c.initial }));
+    world.corpses = (d.world.corpses || []).map((c) => ({ x: c.x, y: c.y, meat: c.meat, initial: c.initial, species: c.species }));
     world.corpseHash = new Evo.SpatialHash(world, 64);
     world.corpseHash.rebuild(world.corpses);
     sim.world = world;

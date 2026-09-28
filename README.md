@@ -44,7 +44,7 @@ starting populations, plant growth, mutation rate, seasons and more.
   stop in hard frost. Snow shows on frozen ground; **Heat map** shows
   temperature directly, and the corner shows the temperature under the cursor.
 - **DNA** (`js/genome.js`): size, muscle, stamina, senses, diet (0 = plants,
-  1 = meat), browsing (grass vs. tree leaves), swimming, fur, appetite, aggression, fear, armor,
+  1 = meat), browsing (grass vs. tree leaves), swimming, fur, appetite, cannibalism, aggression, fear, armor,
   camouflage, herding, litter size, maturity age, lifespan, mutation rate (itself
   evolvable).
 - **Plant food & niches**: tiles grow three foods: grass (open land), tree leaves
@@ -91,8 +91,13 @@ starting populations, plant growth, mutation rate, seasons and more.
   badly-wired babies; 0 = brains no longer mutate). Sprinting burns stamina; exhausted creatures
   can't sprint.
 - **Diet** is a trade-off: digesting meat well means digesting plants badly.
-  Predators hunt prey they think they can take; dead creatures leave carcasses
-  that rot.
+  Predators hunt prey they think they can take (never their own species); dead
+  creatures leave carcasses that rot.
+- **Cannibalism**: carcasses remember their species, and a creature can't eat
+  its own species' dead unless its **Cannibalism** gene is above 0.7 (fully at
+  1). It starts at 0, gives no benefit below the threshold, and has a small
+  upkeep cost (disease risk), so evolution pushes it back down; only a lineage
+  under real pressure to eat its own dead is likely to get there.
 - **Reproduction**: mature, well-fed adults find a genetically similar mate
   (crossover + mutation). If none is found for a while they can bud asexually.
   Litter size trades many small babies vs. few well-fed ones.

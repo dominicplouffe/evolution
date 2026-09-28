@@ -260,8 +260,8 @@
       this.corpseHash.rebuild(this.corpses);
     }
 
-    addCorpse(x, y, meat) {
-      if (meat > 0.2) this.corpses.push({ x, y, meat, initial: meat });
+    addCorpse(x, y, meat, species) {
+      if (meat > 0.2) this.corpses.push({ x, y, meat, initial: meat, species });
     }
 
     totalPlant() {

@@ -13,6 +13,7 @@
     { key: 'swim', label: 'Swimming', min: 0, max: 1, weight: 3, desc: 'Fast in water, eats water plants, crosses deep water above 0.5. Clumsy on land and costs upkeep.' },
     { key: 'fur', label: 'Fur', min: 0, max: 1, weight: 2, def: 0.2, desc: 'Keeps it warm: comfortable around 26 °C with no fur, down to -12 °C with thick fur. Too warm or too cold costs energy; extremes hurt. Some upkeep.' },
     { key: 'appetite', label: 'Appetite', min: 0.2, max: 0.95, desc: 'Energy level (fraction of its reserves) below which it gets hungry and looks for food.' },
+    { key: 'cannibal', label: 'Cannibalism', min: 0, max: 1, def: 0, desc: 'Ability to eat dead members of its own species. Does nothing below 0.7 and only works fully at 1, and carries a small upkeep cost (disease risk), so it is very hard to evolve.' },
     { key: 'aggression', label: 'Aggression', min: 0, max: 1, desc: 'Willingness to attack bigger prey and to fight back. Struggling prey injure their attacker.' },
     { key: 'fear', label: 'Fear', min: 0, max: 1, desc: 'How early it runs away from predators.' },
     { key: 'armor', label: 'Armor', min: 0, max: 1, desc: 'Shell/hide. Reduces damage taken, but is heavy (slower) and costly.' },
@@ -111,7 +112,7 @@
     const armorSlow = 1 - 0.35 * g.armor;
     // Long life isn't free: a body built to last spends more on repair.
     const repair = 0.2 * clamp((g.lifespan - 60) / 340, 0, 1);
-    const upkeep = 0.5 + 0.17 * g.speed + 0.1 * g.stamina + 0.15 * g.sense + 0.3 * g.armor + 0.12 * g.camo + 0.15 * g.swim + 0.08 * g.fur + repair;
+    const upkeep = 0.5 + 0.17 * g.speed + 0.1 * g.stamina + 0.15 * g.sense + 0.3 * g.armor + 0.12 * g.camo + 0.15 * g.swim + 0.08 * g.fur + 0.08 * g.cannibal + repair;
     // Slow-maturing species grow into sturdier adults.
     const matFrac = clamp((g.maturity - 6) / 54, 0, 1);
     // Diet: a straight trade-off, so omnivores are workable stepping stones
@@ -173,6 +174,8 @@
         algae: plantEff * Math.sqrt(clamp((g.swim - 0.05) / 0.95, 0, 1)),
       },
       meatEff: g.diet,
+      // Eating your own kind: nothing below 0.7, fully at 1 (see Cannibalism).
+      kinEff: clamp((g.cannibal - 0.7) / 0.3, 0, 1),
     };
   }
 
