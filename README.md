@@ -31,7 +31,8 @@ species (click one to follow a member), a **Hall of fame** (oldest creature, mos
 children, most kills, deepest generation, biggest, fastest, farthest travelled,
 longest-lasting and biggest species; click a living record holder to follow it)
 and an event log (new species, extinctions, new record holders, random events).
-**World settings** lets you change the map size, water level, wrap-around edges,
+Every section of the side panel folds away (click its title); the browser
+remembers which ones you keep open. **World settings** lets you change the map size, water level, wrap-around edges,
 starting populations, plant growth, mutation rate, seasons and more.
 
 ## How the simulation works

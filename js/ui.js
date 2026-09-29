@@ -42,6 +42,7 @@
       this.bindCanvas();
       this.bindSave();
       this.bindDisasters();
+      this.bindPanels();
       this.lastUi = 0;
       this.start();
     }
@@ -89,6 +90,21 @@
     }
 
     // ------------------------------------------------------------ save / load
+    // Every side-panel section folds open/closed; remember which are open.
+    bindPanels() {
+      const KEY = 'evolution.panels';
+      let saved = {};
+      try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { /* defaults */ }
+      for (const d of document.querySelectorAll('#side > details[id]')) {
+        if (saved[d.id] !== undefined) d.open = saved[d.id];
+        d.addEventListener('toggle', () => {
+          saved[d.id] = d.open;
+          try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) { /* ignore */ }
+          if (d.open && this.sim) this.updateUI(true);
+        });
+      }
+    }
+
     // Buttons that start a random event right away.
     bindDisasters() {
       const box = $('#disasterButtons');
@@ -521,13 +537,15 @@
       const rate = this.paused ? 'paused' : `${fmt(this.simRate.rate, 1)}× speed`;
       $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}${this.dayHud(sim)}<br><span class="muted">${rate} · seed ${sim.seed}</span>${this.hover ? `<br>🌡 ${fmt(sim.world.tempAtPoint(this.wrapPoint(this.hover).x, this.wrapPoint(this.hover).y, sim.time))} °C here` : ''}${this.disasterHud(sim)}<br><span class="muted small">v${Evo.VERSION.number} · ${Evo.VERSION.date}</span>`;
 
-      this.chart.draw(sim.history);
+      // Closed panels aren't redrawn (they catch up when opened).
+      const open = (id) => $('#' + id).open;
+      if (open('panelHistory')) this.chart.draw(sim.history);
       if (!this.pressing) {
-        this.updateInspector();
+        if (open('inspectorPanel')) this.updateInspector();
         this.updateSpecies();
-        this.updateFame();
+        if (open('panelFame')) this.updateFame();
       }
-      $('#events').innerHTML = sim.events.map((e) => `<div class="${e.important ? 'big' : ''}"><span class="t">${Evo.fmtTime(e.t)}</span>${e.important ? '⭐ ' : ''}${e.html}</div>`).join('') ||
+      if (open('panelEvents')) $('#events').innerHTML = sim.events.map((e) => `<div class="${e.important ? 'big' : ''}"><span class="t">${Evo.fmtTime(e.t)}</span>${e.important ? '⭐ ' : ''}${e.html}</div>`).join('') ||
         '<span class="muted">Nothing yet…</span>';
 
       if (n === 0 && !this.announcedExtinction) {

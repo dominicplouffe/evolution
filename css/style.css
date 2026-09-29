@@ -33,6 +33,8 @@ details > summary::before { content: '▸ '; color: var(--muted); }
 details[open] > summary::before { content: '▾ '; }
 details > summary h2 { margin: 0; }
 details[open] > summary { margin-bottom: 8px; }
+details > summary::-webkit-details-marker { display: none; }
+.chart-pick { justify-content: flex-end; margin-bottom: 4px; }
 
 .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .row.between { justify-content: space-between; }

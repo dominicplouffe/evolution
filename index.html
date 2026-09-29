@@ -44,7 +44,8 @@
     </main>
 
     <aside id="side">
-      <section class="panel">
+      <details class="panel" id="panelSim" open>
+        <summary><h2>Simulation</h2></summary>
         <div class="row">
           <button id="playPause" class="primary">⏸ Pause</button>
           <div id="speeds" class="seg">
@@ -57,10 +58,10 @@
           </div>
         </div>
         <div id="stats" class="stats"></div>
-      </section>
+      </details>
 
-      <section class="panel">
-        <h2>Save &amp; load</h2>
+      <details class="panel" id="panelSave" open>
+        <summary><h2>Save &amp; load</h2></summary>
         <div class="row">
           <button id="saveBtn" class="primary" title="Save this world in your browser">💾 Save</button>
           <button id="loadBtn" title="Go back to your last save">📂 Load</button>
@@ -70,40 +71,38 @@
         </div>
         <label class="check small save-auto"><input type="checkbox" id="autosave" /> Autosave every minute and when you leave</label>
         <p id="saveStatus" class="muted small"></p>
-      </section>
+      </details>
 
-      <section class="panel">
-        <div class="row between">
-          <h2>History</h2>
-          <select id="chartMetric"></select>
-        </div>
+      <details class="panel" id="panelHistory" open>
+        <summary><h2>History</h2></summary>
+        <div class="row chart-pick"><select id="chartMetric"></select></div>
         <div id="chartLegend" class="legend"></div>
         <div class="chart-wrap">
           <canvas id="chart"></canvas>
           <div id="chartTip" class="tip"></div>
         </div>
-      </section>
+      </details>
 
-      <section class="panel" id="inspectorPanel">
-        <h2>Creature</h2>
+      <details class="panel" id="inspectorPanel" open>
+        <summary><h2>Creature</h2></summary>
         <div id="inspector"><p class="muted">Click a creature on the map to see its DNA.</p></div>
-      </section>
+      </details>
 
-      <section class="panel">
-        <h2>Species <span id="speciesCount" class="muted"></span></h2>
+      <details class="panel" id="panelSpecies" open>
+        <summary><h2>Species <span id="speciesCount" class="muted"></span></h2></summary>
         <div id="speciesList"></div>
-      </section>
+      </details>
 
-      <section class="panel">
-        <h2>Hall of fame</h2>
+      <details class="panel" id="panelFame" open>
+        <summary><h2>Hall of fame</h2></summary>
         <div id="fame"></div>
-      </section>
+      </details>
 
-      <section class="panel">
-        <h2>Events</h2>
+      <details class="panel" id="panelEvents" open>
+        <summary><h2>Events</h2></summary>
         <div id="disasterButtons" class="row small" title="Start a random event now (Random events × in World settings controls how often they happen on their own)"></div>
         <div id="events"></div>
-      </section>
+      </details>
 
       <details class="panel" id="settingsPanel">
         <summary><h2>World settings</h2></summary>
@@ -116,7 +115,7 @@
           (plant growth, mutation, seasons and caps also apply live).</p>
       </details>
 
-      <details class="panel">
+      <details class="panel" id="panelAbout">
         <summary><h2>How it works</h2></summary>
         <div id="about"></div>
       </details>
