@@ -47,7 +47,7 @@ starting populations, plant growth, mutation rate, seasons and more.
   stop in hard frost. Snow shows on frozen ground; **Heat map** shows
   temperature directly, and the corner shows the temperature under the cursor.
 - **DNA** (`js/genome.js`): size, muscle, stamina, senses, diet (0 = plants,
-  1 = meat), browsing (grass vs. tree leaves), swimming, fur, appetite, cannibalism, aggression, fear, armor,
+  1 = meat), browsing (grass vs. tree leaves), swimming, fur, nocturnal, appetite, cannibalism, aggression, fear, armor,
   camouflage, herding, litter size, maturity age, lifespan, mutation rate (itself
   evolvable).
 - **Plant food & niches**: tiles grow three foods: grass (open land), tree leaves
@@ -79,10 +79,11 @@ starting populations, plant growth, mutation rate, seasons and more.
   better-developed babies and sturdier adults. Tree leaves need a specialised
   (high Browsing) gut.
 - **Evolving brains** (`js/brain.js`): every creature carries a small neural
-  network in its DNA (17 senses → 6 hidden neurons → 10 action scores, plus
+  network in its DNA (18 senses → 6 hidden neurons → 10 action scores, plus
   direct connections). Senses include hunger, energy, health, stamina, stomach,
   danger, being attacked (and whether it can win), a mate nearby, the best
-  plants / carrion / prey around, herd size and being out of its habitat. The
+  plants / carrion / prey around, herd size, being out of its habitat and
+  sleepiness. The
   creature does the best-scoring action that's possible right now: flee, fight
   back, court, eat here, go to plants, scavenge, hunt, go home, rest or wander.
   Founders are wired to reproduce the original rules (flee › fight back › court ›
@@ -113,6 +114,17 @@ starting populations, plant growth, mutation rate, seasons and more.
   mates), so once groups diverge they stop interbreeding and stay separate. Predators compete for prey
   and herds spot danger earlier ("many eyes"), which keeps predator booms from
   wiping out every herbivore type.
+- **Day and night**: a day lasts 60 s by default (**Day length**, 0 = always
+  day). Nights darken the map and are 3 °C colder than midday. The **Nocturnal**
+  gene trades day vision for night vision (sight range 100% → 40% in the dark for
+  day creatures, the reverse for night creatures) and sets when a creature is
+  sleepy; the brain has a "sleepy" sense and founders tend to rest then. Sleepers
+  are harder to spot and burn 25% less energy, but see less. The gene can flip
+  in one rare mutation (a body clock switching day for night), which gets
+  around the "half-nocturnal sees badly all the time" valley. Because the
+  founders' predators are day hunters, night-grazing species often appear, and
+  sometimes night-hunting predators follow. **Color by → Day / night activity**
+  shows it.
 - **Random events** (`js/events.js`): every year or two something happens
   (**World settings → Random events ×** sets how often; 0 turns them off, and
   the buttons in the Events panel start one right away):

@@ -7,7 +7,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 ## Already in v1
 
 - Configurable map size, water level, and wrap-around edges (a torus, so no borders)
-- 19 evolvable genes; mutation rate is itself a gene
+- 20 evolvable genes; mutation rate is itself a gene
 - One colour per species; a new species gets a new colour
 - Size/mass trade-offs based on real scaling laws (Kleiber's law, strength ~ mass^0.67)
 - Herbivores, omnivores and carnivores on one diet slider, with a digestion trade-off
@@ -19,6 +19,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - Calories per food (meat is dense, plants are bulky), a stomach that digests over time, and an evolvable Appetite (hunger threshold)
 - Seasons, carcasses that rot, camouflage that works best in forests
 - God tools: drop creatures, grow food, smite, clone a creature
+- Day/night cycle and a Nocturnal gene: night eyes, sleep, and night-active species that dodge day-hunting predators
 - Random events: droughts, ice ages, meteor strikes, plagues and invading species (automatic or on demand)
 - Hall of fame: all-time records for creatures and species, click a living holder to follow it
 - Save/load: autosave to the browser, continue on reload, export/import as a file
@@ -30,7 +31,6 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 ## Next: small additions
 
 - **Heatmap overlays**: where creatures die, where predators hunt, plant density.
-- **Day/night cycle** plus a `nocturnal` gene: night hunters see better in the dark.
 
 ## Medium: richer biology
 

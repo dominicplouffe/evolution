@@ -4,6 +4,8 @@
   'use strict';
 
   // Bright on the map so they stand out against grass and water.
+  // "Active time" colour mode, from the Nocturnal gene.
+  const ACTIVE_COLORS = { day: 'hsl(48, 95%, 60%)', twilight: 'hsl(320, 70%, 65%)', night: 'hsl(210, 95%, 70%)' };
   const NICHE_COLORS = {
     grazer: 'hsl(55, 90%, 60%)',
     browser: 'hsl(25, 90%, 58%)',
@@ -108,7 +110,7 @@
       const B = Evo.BIOMES;
       const winter = Evo.clamp((1 - w.season(this.sim.time)) * 0.8, 0, 0.5);
       const F = w.food;
-      const shift = w.climateShift() + w.seasonSwing(this.sim.time);
+      const shift = w.climateShift() + w.seasonSwing(this.sim.time) + w.dayTemp(this.sim.time);
       for (let i = 0; i < w.biome.length; i++) {
         const b = B[w.biome[i]];
         const o = i * 4;
@@ -139,6 +141,7 @@
 
     creatureColor(c) {
       if (this.colorMode === 'niche') return NICHE_COLORS[Evo.niche(c.g)];
+      if (this.colorMode === 'active') return ACTIVE_COLORS[c.g.nocturnal < 0.33 ? 'day' : c.g.nocturnal > 0.66 ? 'night' : 'twilight'];
       if (this.colorMode === 'diet') {
         // green (plants) -> yellow -> red (meat)
         const d = c.g.diet;
@@ -219,6 +222,13 @@
         ctx.strokeStyle = 'rgba(255,255,255,0.4)';
         ctx.lineWidth = 2 / z;
         ctx.strokeRect(0, 0, w.width, w.height);
+      }
+
+      // Night: darken the land (creatures stay bright so you can still watch).
+      const dark = 1 - w.light(sim.time);
+      if (dark > 0 && !this.heatMap) {
+        ctx.fillStyle = `rgba(8, 14, 45, ${0.5 * dark})`;
+        ctx.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
       }
 
       const detailed = z > 0.35;
@@ -325,4 +335,5 @@
 
   Evo.Renderer = Renderer;
   Evo.NICHE_COLORS = NICHE_COLORS;
+  Evo.ACTIVE_COLORS = ACTIVE_COLORS;
 })((globalThis.Evo = globalThis.Evo || {}));

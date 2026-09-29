@@ -138,7 +138,20 @@
     // Temperature (°C) of a tile right now: its base, the season, and the
     // Climate setting. Seasons swing it by about ±12 °C at default strength.
     tempAt(i, time) {
-      return this.tempBase[i] + this.climateShift() + this.seasonSwing(time);
+      return this.tempBase[i] + this.climateShift() + this.seasonSwing(time) + this.dayTemp(time);
+    }
+
+    // Daylight, 0 (night) .. 1 (day), with a short dawn and dusk. A day
+    // starts at dawn. Day length 0 turns nights off.
+    light(time) {
+      const L = this.cfg.dayLength;
+      if (!(L > 0)) return 1;
+      return Evo.clamp(0.5 + 1.6 * Math.sin((2 * Math.PI * time) / L), 0, 1);
+    }
+
+    // Days are a little warmer than nights (±3 °C).
+    dayTemp(time) {
+      return this.cfg.dayLength > 0 ? (this.light(time) - 0.5) * 6 : 0;
     }
 
     // The Climate setting plus any temporary shift from events (ice age).

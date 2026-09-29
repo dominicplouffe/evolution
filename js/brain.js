@@ -10,7 +10,7 @@
 
   const INPUTS = [
     'bias', 'hungry', 'energy', 'health', 'stamina', 'stomach', 'threat', 'attacked',
-    'canWin', 'readyToMate', 'mateNearby', 'prey', 'carrion', 'plantsHere', 'plantsNearby', 'herd', 'homesick',
+    'canWin', 'readyToMate', 'mateNearby', 'prey', 'carrion', 'plantsHere', 'plantsNearby', 'herd', 'homesick', 'sleepy',
   ];
   const ACTIONS = ['flee', 'fight', 'mate', 'eat', 'graze', 'scavenge', 'hunt', 'home', 'rest', 'wander'];
   const ACTION_LABELS = {
@@ -34,7 +34,7 @@
     scavenge: { hungry: 1.2, carrion: 1.3 },
     hunt: { hungry: 1.2, prey: 1.04 },
     home: { bias: 1.1 },
-    rest: { bias: 1, hungry: -1, readyToMate: -0.6 },
+    rest: { bias: 1, hungry: -1, readyToMate: -0.6, sleepy: 0.5 },
     wander: { bias: 0.6 },
   };
 
@@ -120,6 +120,15 @@
     for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
     const q = new Int16Array(bytes.buffer);
     const w = new Array(SIZE);
+    // Older saves have brains with fewer senses (inputs were only ever added
+    // at the end): copy each block, and give new inputs the founder weights
+    // (direct) or 0 (hidden layer, so behaviour doesn't change).
+    const ni = (q.length - NA * NH) / (NA + NH);
+    if (ni < NI && Number.isInteger(ni)) {
+      for (let i = 0; i < SIZE; i++) w[i] = i < OFF_W1 ? DEFAULT[i] : i < OFF_W2 ? 0 : q[i - OFF_W2 + (NA + NH) * ni] / 1000;
+      for (let r = 0; r < NA + NH; r++) for (let i = 0; i < ni; i++) w[r * NI + i] = q[r * ni + i] / 1000;
+      return w;
+    }
     for (let i = 0; i < SIZE; i++) w[i] = i < q.length ? q[i] / 1000 : DEFAULT[i];
     return w;
   }

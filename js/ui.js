@@ -413,7 +413,7 @@
       form.onchange = () => {
         this.readSettings();
         // Some settings can change on the fly.
-        for (const k of ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration', 'neuralBrains', 'brainMutation', 'eventRate', 'climate']) {
+        for (const k of ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration', 'neuralBrains', 'brainMutation', 'eventRate', 'climate', 'dayLength']) {
           this.sim.cfg[k] = this.cfg[k];
         }
       };
@@ -484,6 +484,11 @@
           species' average, or when it has clearly moved into a different niche, like a grazer's calf that has become a
           browser. Each species has one colour, so you can follow it on the map. Because mates must be similar,
           diverged species stop interbreeding and stay separate. ⭐ in the event log marks a brand-new niche.</li>
+          <li><b>Day and night</b>: days last a minute by default (<b>Day length</b> in World settings; 0 = always
+          day). Nights are dark and a little colder. The <b>Nocturnal</b> gene sets whether a creature's eyes are built for
+          daylight or the dark, and when it gets sleepy. Sleepers tuck away (harder to spot) and save energy, but notice
+          less. Since predators start out active by day, a plant-eater whose body clock flips to night can graze while they
+          sleep — and then a predator may follow it into the night. Colour by <b>Day / night activity</b> to watch it.</li>
           <li><b>Random events</b> shake things up every year or two (<b>Random events ×</b> in World settings; 0 turns
           them off, and the buttons in the Events panel start one right away).
           🏜️ <b>Drought</b>: plants wither in a large region (orange circle), so animals must move or starve.
@@ -514,7 +519,7 @@
       const season = sim.seasonName();
       const icon = { Spring: '🌱', Summer: '☀️', Autumn: '🍂', Winter: '❄️' }[season];
       const rate = this.paused ? 'paused' : `${fmt(this.simRate.rate, 1)}× speed`;
-      $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}<br><span class="muted">${rate} · seed ${sim.seed}</span>${this.hover ? `<br>🌡 ${fmt(sim.world.tempAtPoint(this.wrapPoint(this.hover).x, this.wrapPoint(this.hover).y, sim.time))} °C here` : ''}${this.disasterHud(sim)}<br><span class="muted small">v${Evo.VERSION.number} · ${Evo.VERSION.date}</span>`;
+      $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}${this.dayHud(sim)}<br><span class="muted">${rate} · seed ${sim.seed}</span>${this.hover ? `<br>🌡 ${fmt(sim.world.tempAtPoint(this.wrapPoint(this.hover).x, this.wrapPoint(this.hover).y, sim.time))} °C here` : ''}${this.disasterHud(sim)}<br><span class="muted small">v${Evo.VERSION.number} · ${Evo.VERSION.date}</span>`;
 
       this.chart.draw(sim.history);
       if (!this.pressing) {
@@ -529,6 +534,14 @@
         this.announcedExtinction = true;
         this.toast('Everything died out. Start a new world from the settings panel.');
       } else if (n > 0) this.announcedExtinction = false;
+    }
+
+    // Day or night, shown next to the season.
+    dayHud(sim) {
+      if (!(sim.cfg.dayLength > 0)) return '';
+      const l = sim.world.light(sim.time);
+      const label = l >= 1 ? 'Day' : l <= 0 ? 'Night' : Math.cos((2 * Math.PI * sim.time) / sim.cfg.dayLength) >= 0 ? 'Dawn' : 'Dusk';
+      return ` · <span title="${label}">${{ Day: '☀️', Night: '🌙', Dawn: '🌅', Dusk: '🌇' }[label]}</span>`;
     }
 
     // Active random events with the time left, for the corner display.
@@ -615,6 +628,7 @@
           <span class="k">Water plants · meat</span><span>${fmt(p.eat.algae * 100)}% · ${fmt(p.meatEff * 100)}%</span>
           <span class="k">Upkeep</span><span>${fmt(p.basal, 2)} energy/s</span>
           <span class="k">Temperature · comfy at</span><span>${fmt(c.temp)} °C · ${fmt(p.comfortTemp)} °C (±8)</span>
+          <span class="k">Active · sight now</span><span>${c.g.nocturnal > 0.66 ? '🌙 at night' : c.g.nocturnal < 0.33 ? '☀️ by day' : '🌅 dusk & dawn'} · ${Math.round(c.sight * 100)}%</span>
           <span class="k">Gets hungry below</span><span>${fmt(c.g.appetite * 100)}% energy</span>
           <span class="k">Meal in stomach</span><span>${fmt(c.stomachCal)} calories</span>
         </div>
@@ -635,6 +649,7 @@
       const mode = this.renderer.colorMode;
       let items = [];
       if (mode === 'niche') items = Object.entries(Evo.NICHE_COLORS);
+      if (mode === 'active') items = [['active by day', Evo.ACTIVE_COLORS.day], ['dusk & dawn', Evo.ACTIVE_COLORS.twilight], ['active at night', Evo.ACTIVE_COLORS.night]];
       if (mode === 'diet') items = [['plants', 'hsl(120,75%,45%)'], ['mixed', 'hsl(60,75%,45%)'], ['meat', 'hsl(0,75%,45%)']];
       if (this.renderer.heatMap) items = items.concat([['−15 °C', 'rgb(40,80,200)'], ['5', 'rgb(150,190,235)'], ['15', 'rgb(235,232,215)'], ['25', 'rgb(240,160,90)'], ['35 °C', 'rgb(200,50,40)']]);
       el.style.display = items.length ? 'flex' : 'none';

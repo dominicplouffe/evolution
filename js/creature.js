@@ -14,6 +14,7 @@
     MATE: 'Courting',
     REST: 'Resting',
     DIGEST: 'Digesting',
+    SLEEP: 'Sleeping',
   };
 
   let nextId = 1;
@@ -68,6 +69,8 @@
       this.wanderTurn = 0;
       this.herdSize = 0;
       this.stealth = 1;
+      this.sight = 1;   // sight range multiplier (light, night vision, sleep)
+      this.sleepy = 0;
       this.travelled = 0; // world units moved in its life (Hall of fame)
       this.temp = this.phen.comfortTemp;
       this.home = null;
@@ -102,14 +105,19 @@
     // How far away can I spot `o`? Camouflage works best under cover.
     // (o.stealth is refreshed once per step from the ground it stands on.)
     detectRange(o) {
-      return this.phen.senseRadius * o.stealth;
+      return this.phen.senseRadius * this.sight * o.stealth;
     }
 
     updateStealth(world, time) {
       const i = world.tileIndex(this.x, this.y);
       const cover = i < 0 ? 0 : Evo.BIOMES[world.biome[i]].cover;
-      this.stealth = (1 - this.g.camo * (0.3 + 0.5 * cover)) * this.phen.visibility;
+      this.stealth = (1 - this.g.camo * (0.3 + 0.5 * cover)) * this.phen.visibility * (this.state === STATE.SLEEP ? 0.6 : 1);
       this.temp = i < 0 ? 0 : world.tempAt(i, time);
+      // Day/night: how far I can see right now, and how sleepy I am (awake in
+      // my own time of day, sleepy in the other). A sleeper is less alert.
+      const light = world.light(time), n = this.g.nocturnal;
+      this.sleepy = n * light + (1 - n) * (1 - light);
+      this.sight = (light * this.phen.dayVision + (1 - light) * this.phen.nightVision) * (this.state === STATE.SLEEP ? 0.6 : 1);
     }
 
     // How far the local temperature is outside my comfort zone (°C, 0 = fine).
@@ -123,7 +131,7 @@
     think(sim) {
       const world = sim.world;
       const p = this.phen, g = this.g;
-      const sense = p.senseRadius;
+      const sense = p.senseRadius * this.sight;
 
       // ---- scan surroundings
       let fx = 0, fy = 0, threats = 0, nearestThreat = 0;
@@ -249,6 +257,7 @@
       x[I.plantsNearby] = tile ? norm(tileScore) : 0;
       x[I.herd] = Math.min(herdN, 6) / 6;
       x[I.homesick] = home ? 1 : 0;
+      x[I.sleepy] = this.sleepy;
 
       const util = this.util || (this.util = new Float32Array(B.NA));
       B.run(sim.cfg.neuralBrains ? g.brain : B.DEFAULT, x, util);
@@ -319,7 +328,7 @@
           this.target = null;
           return;
         case 'rest':
-          this.state = this.stomach > 0.25 * p.stomachCap ? STATE.DIGEST : STATE.REST;
+          this.state = this.sleepy > 0.5 ? STATE.SLEEP : this.stomach > 0.25 * p.stomachCap ? STATE.DIGEST : STATE.REST;
           this.target = null;
           return;
       }
@@ -343,7 +352,7 @@
       const wantWater = swim >= 0.5;
       if (inWater === wantWater || (swim > 0.3 && swim < 0.5)) return this.findComfort(world, rng);
       let best = null, bestD = Infinity;
-      const r0 = this.phen.senseRadius;
+      const r0 = this.phen.senseRadius * this.sight;
       for (let i = 0; i < 16; i++) {
         const a = (i / 16) * Math.PI * 2 + rng.float(0, 0.4);
         for (const f of [0.25, 0.6, 1]) {
@@ -364,7 +373,7 @@
       const time = world.lastTime || 0;
       const comfort = this.phen.comfortTemp, swim = this.g.swim;
       let best = null, bestStress = now - 3; // must be clearly better
-      const r0 = this.phen.senseRadius;
+      const r0 = this.phen.senseRadius * this.sight;
       for (let i = 0; i < 12; i++) {
         const a = (i / 12) * Math.PI * 2 + rng.float(0, 0.5);
         const r = r0 * (i % 2 ? 0.5 : 1);
@@ -492,8 +501,9 @@
       if (this.g.swim > 0.5 && !world.biomeAt(this.x, this.y).water) this.energy -= p.basal * 1.2 * (this.g.swim - 0.5) * dt;
 
       // Metabolism: resting cost (Kleiber-ish) + movement cost ~ v².
+      // Sleeping lowers the resting cost.
       const vr = this.v / 50;
-      this.energy -= (p.basal + p.moveCost * vr * vr) * dt;
+      this.energy -= (p.basal * (this.state === STATE.SLEEP ? 0.75 : 1) + p.moveCost * vr * vr) * dt;
 
       if (this.energy <= 0) {
         this.energy = 0;
@@ -542,7 +552,7 @@
 
         case STATE.HUNT:
         case STATE.FIGHT: {
-          if (!t || !t.alive || this.distTo(world, t) > p.senseRadius * 1.4 || (this.state === STATE.HUNT && this.chaseTime > 10)) {
+          if (!t || !t.alive || this.distTo(world, t) > p.senseRadius * this.sight * 1.4 || (this.state === STATE.HUNT && this.chaseTime > 10)) {
             if (this.state === STATE.HUNT) this.huntCooldown = 4;
             this.state = STATE.WANDER;
             this.target = null;
@@ -555,7 +565,7 @@
           const px = t.x + Math.cos(t.heading) * t.v * lead;
           const py = t.y + Math.sin(t.heading) * t.v * lead;
           wantHeading = this.headTo(world, { x: px, y: py });
-          sprint = d < p.senseRadius * 0.8;
+          sprint = d < p.senseRadius * this.sight * 0.8;
           const reach = p.radius + t.phen.radius + 3;
           if (d < reach) {
             wantSpeed = t.v;
@@ -630,6 +640,7 @@
 
         case STATE.REST:
         case STATE.DIGEST:
+        case STATE.SLEEP:
           wantSpeed = 0;
           break;
 

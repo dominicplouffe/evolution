@@ -15,7 +15,7 @@
     'hungry', 'exhausted', 'species', 'generation', 'parentIds', 'children', 'kills', 'reproCooldown',
     'mateSearch', 'huntCooldown', 'bornAt', 'herdSize', 'growStart', 'travelled', 'infected', 'immune',
   ];
-  const KEEP_STATES = new Set(['Wandering', 'Resting', 'Digesting', 'Eating']);
+  const KEEP_STATES = new Set(['Wandering', 'Resting', 'Digesting', 'Eating', 'Sleeping']);
 
   // ---- typed arrays <-> base64
   function toB64(typed) {

@@ -12,6 +12,7 @@
     { key: 'feeding', label: 'Browsing', min: 0, max: 1, weight: 3, desc: '0 = grazes low grass, 1 = browses tree leaves. Leaves are only reachable with a big body.' },
     { key: 'swim', label: 'Swimming', min: 0, max: 1, weight: 3, desc: 'Fast in water, eats water plants, crosses deep water above 0.5. Clumsy on land and costs upkeep.' },
     { key: 'fur', label: 'Fur', min: 0, max: 1, weight: 2, def: 0.2, desc: 'Keeps it warm: comfortable around 26 °C with no fur, down to -12 °C with thick fur. Too warm or too cold costs energy; extremes hurt. Some upkeep.' },
+    { key: 'nocturnal', label: 'Nocturnal', min: 0, max: 1, weight: 2, def: 0, flip: 0.05, desc: '0 = active by day, 1 = active at night. Sets how well it sees in daylight vs. in the dark (a night-eye sees poorly in bright light), and when it gets sleepy. Sleepers hide and save energy, but notice less. Rarely flips in one mutation (a body clock switching day for night).' },
     { key: 'appetite', label: 'Appetite', min: 0.2, max: 0.95, desc: 'Energy level (fraction of its reserves) below which it gets hungry and looks for food.' },
     { key: 'cannibal', label: 'Cannibalism', min: 0, max: 1, def: 0, desc: 'Ability to eat dead members of its own species. Does nothing below 0.7 and only works fully at 1, and carries a small upkeep cost (disease risk), so it is very hard to evolve.' },
     { key: 'aggression', label: 'Aggression', min: 0, max: 1, desc: 'Willingness to attack bigger prey and to fight back. Struggling prey injure their attacker.' },
@@ -53,7 +54,9 @@
         const span = gene.max - gene.min;
         // Mostly small steps, occasionally a big jump.
         const step = rng.chance(0.1) ? 0.25 : 0.07;
-        out[gene.key] = clamp(out[gene.key] + rng.gauss() * span * step, gene.min, gene.max);
+        // Some genes can flip outright (a body clock switching day for night).
+        if (gene.flip && rng.chance(gene.flip)) out[gene.key] = gene.max + gene.min - out[gene.key];
+        else out[gene.key] = clamp(out[gene.key] + rng.gauss() * span * step, gene.min, gene.max);
       }
     }
     out.brain = Evo.Brain.mutate(g.brain || Evo.Brain.DEFAULT, rng, p * brainScale);
@@ -148,6 +151,9 @@
       // Small bodies are harder to spot.
       visibility: 0.75 + 0.25 * clamp(s, 0, 1),
       senseRadius: 40 + 75 * g.sense + 8 * s,
+      // Eyes are built for daylight or for the dark: sight range multipliers.
+      dayVision: 1 - 0.6 * g.nocturnal,
+      nightVision: 0.4 + 0.6 * g.nocturnal,
       // Energy storage scales gently with growth so babies aren't starving at birth.
       maxEnergy: 100 * adultMass * (0.3 + 0.7 * grow),
       // + a fixed overhead so being tiny isn't free (organs, brain...)
