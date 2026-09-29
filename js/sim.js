@@ -31,6 +31,7 @@
       this.nextMigrationCheck = 0;
       this.missingSince = { herbivore: null, carnivore: null };
       this.events = [];
+      this.fame = {}; // Hall of fame records (see fame.js)
 
       this.herbivoreSpecies = this.species.create(Evo.Genome.make(HERBIVORE), null, 0);
       this.carnivoreSpecies = this.species.create(Evo.Genome.make(CARNIVORE), null, 0);
@@ -132,6 +133,7 @@
 
     kill(c, cause) {
       if (!c.alive) return;
+      Evo.Fame.consider(this, c); // final values count for the Hall of fame
       c.alive = false;
       c.deathCause = cause;
       this.stats.deaths++;
@@ -203,6 +205,7 @@
     }
 
     census() {
+      Evo.Fame.update(this);
       const counts = { herbivore: 0, omnivore: 0, carnivore: 0 };
       const niches = { grazer: 0, browser: 0, swimmer: 0, omnivore: 0, carnivore: 0 };
       const sums = {};

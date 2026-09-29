@@ -345,6 +345,16 @@
         this.updateInspector();
       });
 
+      $('#fame').addEventListener('click', (e) => {
+        const row = e.target.closest('.fame-row.clickable');
+        if (!row) return;
+        const c = this.sim.creatures.find((x) => x.id === Number(row.dataset.id));
+        if (!c) { this.toast('That record holder has died'); return; }
+        this.select(c);
+        this.follow = true;
+        this.renderer.cam.zoom = Math.max(this.renderer.cam.zoom, 1.5);
+      });
+
       $('#speciesList').addEventListener('click', (e) => {
         const row = e.target.closest('.sp');
         if (!row) return;
@@ -487,6 +497,7 @@
       if (!this.pressing) {
         this.updateInspector();
         this.updateSpecies();
+        this.updateFame();
       }
       $('#events').innerHTML = sim.events.map((e) => `<div class="${e.important ? 'big' : ''}"><span class="t">${Evo.fmtTime(e.t)}</span>${e.important ? '⭐ ' : ''}${e.html}</div>`).join('') ||
         '<span class="muted">Nothing yet…</span>';
@@ -495,6 +506,30 @@
         this.announcedExtinction = true;
         this.toast('Everything died out. Start a new world from the settings panel.');
       } else if (n > 0) this.announcedExtinction = false;
+    }
+
+    updateFame() {
+      const sim = this.sim;
+      const alive = new Map();
+      for (const c of sim.creatures) alive.set(c.id, c);
+      const fmtValue = (r, v) => r.unit === 'time' ? Evo.fmtTime(v)
+        : r.unit === 'speed' ? `${fmt(v)} u/s` : r.unit === 'tiles' ? `${fmt(v)} tiles`
+        : r.unit === 'members' ? `${fmt(v)}` : fmt(v, r.digits || 0);
+      const rows = Evo.Fame.RECORDS.map((r) => {
+        const h = sim.fame[r.key];
+        if (!h) return '';
+        const sp = sim.species.get(h.species);
+        const color = sp ? sp.color : '#999';
+        const isCreature = h.id !== undefined;
+        const living = isCreature ? alive.has(h.id) : !!(sp && sp.count > 0);
+        const who = isCreature ? `${esc(h.name)} #${h.id}` : esc(h.name);
+        const state = living ? '<span class="live">alive</span>' : '<span class="muted">†</span>';
+        return `<div class="fame-row${isCreature && living ? ' clickable' : ''}" ${isCreature && living ? `data-id="${h.id}" title="Click to follow"` : ''}>
+          <span class="fame-icon">${r.icon}</span>
+          <div><div>${esc(r.label)}</div><div class="meta"><span class="swatch" style="background:${color}"></span>${who} · ${h.niche} ${state}</div></div>
+          <span class="n">${fmtValue(r, h.value)}</span></div>`;
+      }).join('');
+      $('#fame').innerHTML = rows || '<span class="muted">No records yet…</span>';
     }
 
     updateSpecies() {

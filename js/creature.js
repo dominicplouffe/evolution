@@ -68,6 +68,7 @@
       this.wanderTurn = 0;
       this.herdSize = 0;
       this.stealth = 1;
+      this.travelled = 0; // world units moved in its life (Hall of fame)
       this.temp = this.phen.comfortTemp;
       this.home = null;
       this.chasedBy = null;
@@ -687,6 +688,7 @@
       }
       this.x = nx;
       this.y = ny;
+      this.travelled += step;
       world.wrapPos(this);
     }
   }

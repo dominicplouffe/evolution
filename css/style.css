@@ -97,6 +97,13 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 #speciesList .sp .meta { color: var(--muted); font-size: 11px; }
 #speciesList .sp .n { font-variant-numeric: tabular-nums; }
 
+#fame .fame-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 6px; align-items: center; padding: 3px 4px; border-radius: 4px; }
+#fame .fame-row.clickable { cursor: pointer; }
+#fame .fame-row.clickable:hover { background: var(--panel-2); }
+#fame .fame-icon { font-size: 15px; text-align: center; }
+#fame .meta { color: var(--muted); font-size: 11px; }
+#fame .n { font-variant-numeric: tabular-nums; font-weight: 600; }
+#fame .live { color: #5bc4a6; }
 #events { max-height: 150px; overflow-y: auto; font-size: 12px; }
 #events div { padding: 2px 0; border-bottom: 1px solid #1e2734; color: var(--text-2); }
 #events .t { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }

@@ -19,6 +19,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - Calories per food (meat is dense, plants are bulky), a stomach that digests over time, and an evolvable Appetite (hunger threshold)
 - Seasons, carcasses that rot, camouflage that works best in forests
 - God tools: drop creatures, grow food, smite, clone a creature
+- Hall of fame: all-time records for creatures and species, click a living holder to follow it
 - Save/load: autosave to the browser, continue on reload, export/import as a file
 - Evolving neural-network brains: DNA-encoded networks score the possible actions; founders start with the classic rules and behaviour evolves from there
 - Cannibalism is a hard-to-evolve gene: nobody eats their own species' carcasses until it passes 0.7
@@ -27,7 +28,6 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 
 ## Next: small additions
 
-- **Hall of fame**: oldest creature, most kills, most children, longest-lived species.
 - **Heatmap overlays**: where creatures die, where predators hunt, plant density.
 - **Random events**: drought, ice age, meteor strike, plague, an invasive species arrives.
 - **Day/night cycle** plus a `nocturnal` gene: night hunters see better in the dark.

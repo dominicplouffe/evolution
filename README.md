@@ -27,7 +27,10 @@ No build step and no dependencies. Either:
 
 The side panel shows live stats, a history chart (population by diet, or the
 average of any gene over time), the selected creature's DNA, the list of living
-species (click one to follow a member) and an event log (new species, extinctions).
+species (click one to follow a member), a **Hall of fame** (oldest creature, most
+children, most kills, deepest generation, biggest, fastest, farthest travelled,
+longest-lasting and biggest species; click a living record holder to follow it)
+and an event log (new species, extinctions, new record holders).
 **World settings** lets you change the map size, water level, wrap-around edges,
 starting populations, plant growth, mutation rate, seasons and more.
 
@@ -126,6 +129,7 @@ js/genome.js        genes, mutation, crossover, DNA -> body, species
 js/world.js         terrain, plants, carcasses, spatial hash, wrap-around
 js/creature.js      creature state + behaviour
 js/sim.js           simulation loop, births, deaths, stats, migration
+js/fame.js          Hall of fame records
 js/save.js          save/load: browser storage (gzipped) and .json files
 js/renderer.js      canvas drawing + camera
 js/chart.js         history chart

@@ -13,7 +13,7 @@
   const CREATURE_FIELDS = [
     'id', 'x', 'y', 'heading', 'v', 'age', 'grow', 'health', 'energy', 'stamina', 'stomach', 'stomachCal',
     'hungry', 'exhausted', 'species', 'generation', 'parentIds', 'children', 'kills', 'reproCooldown',
-    'mateSearch', 'huntCooldown', 'bornAt', 'herdSize', 'growStart',
+    'mateSearch', 'huntCooldown', 'bornAt', 'herdSize', 'growStart', 'travelled',
   ];
   const KEEP_STATES = new Set(['Wandering', 'Resting', 'Digesting', 'Eating']);
 
@@ -88,6 +88,7 @@
       nextMigrationCheck: sim.nextMigrationCheck,
       missingSince: sim.missingSince,
       events: sim.events,
+      fame: sim.fame,
     };
   }
 
@@ -147,6 +148,7 @@
     sim.nextMigrationCheck = d.nextMigrationCheck || d.time;
     sim.missingSince = d.missingSince || { herbivore: null, carnivore: null };
     sim.events = d.events || [];
+    sim.fame = d.fame || {};
 
     // Creatures: construct normally (fills in every field), then restore.
     // Missing genes (from an older version) get their default value.
