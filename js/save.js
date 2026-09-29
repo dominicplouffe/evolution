@@ -90,6 +90,8 @@
       events: sim.events,
       fame: sim.fame,
       disasters: sim.disasters || null,
+      treeEvery: sim.treeEvery,
+      treeNext: sim.treeNext,
     };
   }
 
@@ -150,6 +152,8 @@
     sim.missingSince = d.missingSince || { herbivore: null, carnivore: null };
     sim.events = d.events || [];
     sim.fame = d.fame || {};
+    sim.treeEvery = d.treeEvery;
+    sim.treeNext = d.treeNext;
 
     // Creatures: construct normally (fills in every field), then restore.
     // Missing genes (from an older version) get their default value.

@@ -307,6 +307,15 @@
       }
     }
 
+    // Select and follow a random living member of a species.
+    followSpecies(id) {
+      const members = this.sim.creatures.filter((c) => c.species === id);
+      if (!members.length) return;
+      this.select(members[Math.floor(Math.random() * members.length)]);
+      this.follow = true;
+      this.renderer.cam.zoom = Math.max(this.renderer.cam.zoom, 1.5);
+    }
+
     select(c) {
       this.selected = c;
       if (!c) this.follow = false;
@@ -388,15 +397,10 @@
 
       $('#speciesList').addEventListener('click', (e) => {
         const row = e.target.closest('.sp');
-        if (!row) return;
-        const id = Number(row.dataset.id);
-        const members = this.sim.creatures.filter((c) => c.species === id);
-        if (members.length) {
-          this.select(members[Math.floor(Math.random() * members.length)]);
-          this.follow = true;
-          this.renderer.cam.zoom = Math.max(this.renderer.cam.zoom, 1.5);
-        }
+        if (row) this.followSpecies(Number(row.dataset.id));
       });
+      this.tree = new Evo.Tree.TreeView(this);
+      $('#treeBtn').addEventListener('click', () => this.tree.toggle());
 
       window.addEventListener('keydown', (e) => {
         if (e.target.closest && e.target.closest('input, select, textarea')) return;
@@ -406,7 +410,8 @@
         const speeds = [0.5, 1, 2, 4, 8, 32];
         if (key >= '1' && key <= '6') this.setSpeed(speeds[Number(key) - 1]);
         if (key === 'f' && this.selected) this.follow = !this.follow;
-        if (key === 'escape') this.select(null);
+        if (key === 'escape') { if (this.tree.open) this.tree.toggle(false); else this.select(null); }
+        if (key === 't') this.tree.toggle();
         if (key === '0' || key === 'home') this.fitMap();
         const tools = { i: 'inspect', h: 'herbivore', c: 'carnivore', g: 'food', x: 'smite' };
         if (tools[key]) this.setTool(tools[key]);
@@ -545,6 +550,7 @@
         this.updateSpecies();
         if (open('panelFame')) this.updateFame();
       }
+      if (this.tree.open) this.tree.draw();
       if (open('panelEvents')) $('#events').innerHTML = sim.events.map((e) => `<div class="${e.important ? 'big' : ''}"><span class="t">${Evo.fmtTime(e.t)}</span>${e.important ? '⭐ ' : ''}${e.html}</div>`).join('') ||
         '<span class="muted">Nothing yet…</span>';
 

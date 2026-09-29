@@ -17,6 +17,7 @@
 
   function state(sim) {
     if (!sim.disasters) sim.disasters = { active: [], nextCheck: 300, nextId: 1 };
+    if (!sim.disasters.log) sim.disasters.log = []; // every event so far (family tree)
     return sim.disasters;
   }
 
@@ -75,6 +76,7 @@
       e.end = sim.time + 30;
     }
     st.active.push(e);
+    st.log.push(e); // same object, so its end time stays current
     applyEffects(sim);
     return e;
   }

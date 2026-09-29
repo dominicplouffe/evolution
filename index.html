@@ -11,6 +11,23 @@
     <main id="stage">
       <canvas id="view"></canvas>
 
+      <div id="treeView" class="panel" hidden>
+        <div class="row between">
+          <h2>🌳 Family tree of species</h2>
+          <div class="row">
+            <span id="treeInfo" class="muted small"></span>
+            <label class="small muted"><input type="checkbox" id="treeSmall" /> show tiny species</label>
+            <button id="treeClose" title="Close (T or Esc)">✕</button>
+          </div>
+        </div>
+        <p class="muted small tree-help">Each band is a species, from when it appeared to now (or until it died out, ▏);
+          its thickness is its population (a gap means it died out and migrants brought it back). Branches show where a species split off its parent. Shaded stripes are random
+          events. Hover a species to see its relatives and DNA; click a living one to follow it.</p>
+        <canvas id="treeAxis"></canvas>
+        <div id="treeScroll"><canvas id="treeCanvas"></canvas></div>
+        <div id="treeTip" class="tip"></div>
+      </div>
+
       <div id="toolbar" class="panel">
         <div class="group" id="tools">
           <button data-tool="inspect" class="active" title="Click a creature to inspect it. Drag to pan. (I)">🔍 Inspect</button>
@@ -38,7 +55,7 @@
       <div id="mapLegend" class="panel"></div>
       <div id="help" class="panel">
         Drag to pan · Wheel to zoom · <kbd>Space</kbd> pause · <kbd>1</kbd>–<kbd>6</kbd> speed ·
-        <kbd>F</kbd> follow · <kbd>Esc</kbd> deselect · <kbd>0</kbd> fit map
+        <kbd>F</kbd> follow · <kbd>Esc</kbd> deselect · <kbd>T</kbd> family tree · <kbd>0</kbd> fit map
       </div>
       <div id="toast"></div>
     </main>
@@ -90,6 +107,7 @@
 
       <details class="panel" id="panelSpecies" open>
         <summary><h2>Species <span id="speciesCount" class="muted"></span></h2></summary>
+        <button id="treeBtn" title="Family tree of every species so far (T)">🌳 Family tree</button>
         <div id="speciesList"></div>
       </details>
 
@@ -131,6 +149,7 @@
   <script src="js/creature.js"></script>
   <script src="js/fame.js"></script>
   <script src="js/events.js"></script>
+  <script src="js/tree.js"></script>
   <script src="js/sim.js"></script>
   <script src="js/save.js"></script>
   <script src="js/renderer.js"></script>

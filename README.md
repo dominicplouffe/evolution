@@ -23,11 +23,13 @@ No build step and no dependencies. Either:
 | Drop creatures | Herbivore (<kbd>H</kbd>) / Carnivore (<kbd>C</kbd>) tool, click the map |
 | Grow food / smite | <kbd>G</kbd> / <kbd>X</kbd>, click or drag |
 | Save / continue later | **💾 Save** in the side panel (autosaves every minute and when you leave). Reopening the page continues your world. **Export**/**Import** save it as a `.json` file |
+| Family tree of species | <kbd>T</kbd>, or **🌳 Family tree** in the Species panel |
 | Fit whole map | <kbd>0</kbd> (or <kbd>Home</kbd>), or the **Fit map** button |
 
 The side panel shows live stats, a history chart (population by diet, or the
 average of any gene over time), the selected creature's DNA, the list of living
-species (click one to follow a member), a **Hall of fame** (oldest creature, most
+species (click one to follow a member; **🌳 Family tree** or <kbd>T</kbd> opens the
+family tree of every species so far, with their populations over time), a **Hall of fame** (oldest creature, most
 children, most kills, deepest generation, biggest, fastest, farthest travelled,
 longest-lasting and biggest species; click a living record holder to follow it)
 and an event log (new species, extinctions, new record holders, random events).
@@ -158,6 +160,7 @@ js/creature.js      creature state + behaviour
 js/sim.js           simulation loop, births, deaths, stats, migration
 js/fame.js          Hall of fame records
 js/events.js        random events: drought, ice age, meteor, plague, invaders
+js/tree.js          family tree of species (population history + drawing)
 js/save.js          save/load: browser storage (gzipped) and .json files
 js/renderer.js      canvas drawing + camera
 js/chart.js         history chart

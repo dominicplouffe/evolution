@@ -19,6 +19,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - Calories per food (meat is dense, plants are bulky), a stomach that digests over time, and an evolvable Appetite (hunger threshold)
 - Seasons, carcasses that rot, camouflage that works best in forests
 - God tools: drop creatures, grow food, smite, clone a creature
+- Family tree of species: every species' population over time, where it branched off, and the random events it lived through
 - Day/night cycle and a Nocturnal gene: night eyes, sleep, and night-active species that dodge day-hunting predators
 - Random events: droughts, ice ages, meteor strikes, plagues and invading species (automatic or on demand)
 - Hall of fame: all-time records for creatures and species, click a living holder to follow it
@@ -43,7 +44,6 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - **Disease and parasites** that spread in dense herds, which pays off for loners and immune genes.
 - **Memory and scent**: remember good feeding spots; predators follow scent trails.
 - **Eggs vs live birth, parental care**: parents that guard their babies.
-- **Phylogenetic tree view**: the full family tree of species over time.
 
 ## Big: the endless map
 

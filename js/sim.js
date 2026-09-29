@@ -241,6 +241,7 @@
           if (sp.peak >= 10) this.logEvent(`<b>${sp.name}</b> went extinct (peak ${sp.peak})`);
         }
       }
+      Evo.Tree.sample(this); // population history for the family tree
       const n = this.creatures.length;
       let drift = 0;
       for (const c of this.creatures) drift += Evo.Brain.drift(c.g.brain);
