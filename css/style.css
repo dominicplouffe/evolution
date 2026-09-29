@@ -70,7 +70,7 @@ button.primary:hover { background: #2a5286; }
 #treeView .tree-help { margin: 4px 0 6px; }
 #treeAxis { width: 100%; display: block; flex-shrink: 0; }
 #treeScroll { flex: 1; overflow-y: auto; min-height: 0; }
-#treeCanvas { width: 100%; display: block; cursor: pointer; }
+#treeCanvas { position: sticky; top: 0; width: 100%; display: block; cursor: pointer; }
 #treeBtn { margin-bottom: 6px; }
 kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; font-size: 11px; }
 #toast { position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%); background: rgba(20, 27, 38, 0.95);

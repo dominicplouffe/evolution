@@ -550,7 +550,7 @@
         this.updateSpecies();
         if (open('panelFame')) this.updateFame();
       }
-      if (this.tree.open) this.tree.draw();
+      this.tree.tick();
       if (open('panelEvents')) $('#events').innerHTML = sim.events.map((e) => `<div class="${e.important ? 'big' : ''}"><span class="t">${Evo.fmtTime(e.t)}</span>${e.important ? '⭐ ' : ''}${e.html}</div>`).join('') ||
         '<span class="muted">Nothing yet…</span>';
 

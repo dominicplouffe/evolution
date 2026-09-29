@@ -82,6 +82,9 @@
     plague: 'rgba(190, 90, 255, 0.13)', invaders: 'rgba(255, 255, 255, 0.08)',
   };
 
+  // Only the rows in view are drawn (the canvas is the size of the visible
+  // area and the list scrolls underneath it), and live data is refreshed at
+  // most once a second, so a long run with hundreds of species stays cheap.
   class TreeView {
     constructor(app) {
       this.app = app;
@@ -89,15 +92,20 @@
       this.axis = document.getElementById('treeAxis');
       this.canvas = document.getElementById('treeCanvas');
       this.scroll = document.getElementById('treeScroll');
+      this.spacer = document.getElementById('treeSpacer');
       this.tip = document.getElementById('treeTip');
       this.info = document.getElementById('treeInfo');
       this.showSmall = false;
       this.hover = null;
+      this.related = null;
       this.rows = [];
+      this.lastRefresh = -1e9;
       document.getElementById('treeClose').addEventListener('click', () => this.toggle(false));
-      document.getElementById('treeSmall').addEventListener('change', (e) => { this.showSmall = e.target.checked; this.draw(); });
+      document.getElementById('treeSmall').addEventListener('change', (e) => { this.showSmall = e.target.checked; this.refresh(); });
+      this.scroll.addEventListener('scroll', () => this.paint(), { passive: true });
+      window.addEventListener('resize', () => { if (this.open) this.paint(); });
       this.canvas.addEventListener('mousemove', (e) => this.onMove(e));
-      this.canvas.addEventListener('mouseleave', () => { this.hover = null; this.tip.style.display = 'none'; this.draw(); });
+      this.canvas.addEventListener('mouseleave', () => this.setHover(null));
       this.canvas.addEventListener('click', (e) => this.onClick(e));
     }
 
@@ -105,36 +113,141 @@
 
     toggle(on = !this.open) {
       this.el.hidden = !on;
-      if (on) this.draw();
+      if (on) this.refresh();
+      else this.setHover(null);
+    }
+
+    // Called with every UI update; only does work about once a second.
+    tick() {
+      if (!this.open) return;
+      const now = performance.now();
+      if (now - this.lastRefresh > 1000) this.refresh();
+    }
+
+    // Recompute which species to show and the scales, then repaint.
+    refresh() {
+      if (!this.open) return;
+      this.lastRefresh = performance.now();
+      const sim = this.app.sim;
+      const { rows, hidden } = layout(sim, this.showSmall ? 0 : 5);
+      this.rows = rows;
+      this.rowOf = new Map(rows.map((sp, i) => [sp.id, i]));
+      this.kids = new Map();
+      for (const sp of rows) {
+        if (!this.rowOf.has(sp.parentId)) continue;
+        if (!this.kids.has(sp.parentId)) this.kids.set(sp.parentId, []);
+        this.kids.get(sp.parentId).push(sp);
+      }
+      let maxV = 1;
+      for (const sp of rows) if (sp.pop) for (const v of sp.pop.v) if (v > maxV) maxV = v;
+      this.maxV = maxV;
+      this.tMax = sim.time;
+      this.every = sim.treeEvery || 5;
+      if (this.hover && !this.rowOf.has(this.hover.id)) this.setHover(null, true);
+      else if (this.hover) this.findRelated();
+      this.info.textContent = `${rows.length} species${hidden ? ` · ${hidden} tiny ones hidden` : ''} · ${rows.filter((s) => s.count > 0).length} alive`;
+      this.spacer.style.height = Math.max(0, TOP * 2 + rows.length * ROW - this.scroll.clientHeight) + 'px';
+      this.paint();
     }
 
     // Plot area in CSS pixels.
     x(t) { return LEFT + (t / Math.max(1, this.tMax)) * (this.W - LEFT - LABEL); }
 
-    draw() {
+    paint() {
       if (!this.open) return;
       const sim = this.app.sim;
-      const { rows, hidden } = layout(sim, this.showSmall ? 0 : 5);
-      this.rows = rows;
-      this.tMax = sim.time;
       const dpr = window.devicePixelRatio || 1;
       const W = (this.W = this.scroll.clientWidth);
-      const H = TOP * 2 + rows.length * ROW;
-      this.info.textContent = `${rows.length} species${hidden ? ` · ${hidden} tiny ones hidden` : ''} · ${rows.filter((s) => s.count > 0).length} alive`;
+      const VH = this.scroll.clientHeight;
+      const top = this.scroll.scrollTop;
+      this.paintAxis(sim, W, dpr);
 
-      // Which species are related to the hovered one (ancestors + descendants).
-      let related = null;
-      if (this.hover) {
-        related = new Set();
-        for (let s = this.hover; s; s = sim.species.get(s.parentId)) related.add(s.id);
-        for (const s of rows) if (this.isDescendant(sim, s, this.hover)) related.add(s.id);
+      const cv = this.canvas;
+      cv.style.height = VH + 'px';
+      if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(VH * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(VH * dpr); }
+      const ctx = cv.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, -top * dpr); // draw in list coordinates
+      ctx.clearRect(0, top, W, VH);
+
+      // Random events as shaded stripes.
+      for (const e of (sim.disasters && sim.disasters.log) || []) {
+        ctx.fillStyle = EVENT_COLORS[e.kind];
+        const x0 = this.x(e.start), x1 = this.x(Math.min(e.end, this.tMax));
+        ctx.fillRect(x0, top, Math.max(2, x1 - x0), VH);
       }
 
-      // ---- time axis (stays put while the tree scrolls)
-      const ax = this.axis;
-      const AH = 26;
+      const yOf = (i) => TOP + i * ROW + ROW / 2;
+      const first = Math.max(0, Math.floor((top - TOP) / ROW) - 1);
+      const last = Math.min(this.rows.length - 1, Math.ceil((top + VH - TOP) / ROW) + 1);
+      const rows = this.rows, related = this.related;
+      const maxV = this.maxV, every = this.every;
+      const half = (v) => (v > 0 ? 1.2 + 7 * Math.sqrt(v / maxV) : 0);
+
+      // Branch lines: any that cross the visible area (cheap checks for all).
+      ctx.lineWidth = 1;
+      for (let i = 0; i < rows.length; i++) {
+        const sp = rows[i];
+        const pr = this.rowOf.get(sp.parentId);
+        if (pr === undefined || i < first || pr > last) continue;
+        ctx.globalAlpha = related && !related.has(sp.id) ? 0.18 : sp.count > 0 ? 1 : 0.6;
+        ctx.strokeStyle = sp.color;
+        const bx = this.x(sp.born);
+        ctx.beginPath();
+        ctx.moveTo(bx, yOf(pr));
+        ctx.lineTo(bx, yOf(i));
+        ctx.stroke();
+      }
+
+      // Bands and labels for the rows in view.
+      for (let i = first; i <= last; i++) {
+        const sp = rows[i];
+        const y = yOf(i);
+        const alive = sp.count > 0;
+        const end = alive ? this.tMax : sp.extinctAt !== null ? sp.extinctAt : this.tMax;
+        ctx.globalAlpha = related && !related.has(sp.id) ? 0.18 : alive ? 1 : 0.6;
+        ctx.fillStyle = sp.color;
+        const p = sp.pop;
+        if (p && p.v.length) {
+          // Population over time, one point per sample (at most 400).
+          const x0 = this.x(sp.born), xs = [x0], hs = [1.2];
+          for (let j = 0; j < p.v.length; j++) {
+            const t = (p.i0 + j) * every;
+            if (t > sp.born && t < end) { xs.push(this.x(t)); hs.push(half(p.v[j])); }
+          }
+          xs.push(this.x(end)); hs.push(alive ? half(sp.count) : 1.2);
+          ctx.beginPath();
+          ctx.moveTo(xs[0], y - hs[0]);
+          for (let k = 1; k < xs.length; k++) ctx.lineTo(xs[k], y - hs[k]);
+          for (let k = xs.length - 1; k >= 0; k--) ctx.lineTo(xs[k], y + hs[k]);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.fillRect(this.x(sp.born), y - 1.5, Math.max(2, this.x(end) - this.x(sp.born)), 3);
+        }
+        const ex = this.x(end);
+        if (!alive) {
+          ctx.strokeStyle = sp.color;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(ex + 2, y - 4); ctx.lineTo(ex + 2, y + 4); ctx.stroke();
+          ctx.lineWidth = 1;
+        }
+        ctx.font = `${sp === this.hover ? '600 ' : ''}12px system-ui, sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = alive ? '#e8edf3' : '#8a96a6';
+        ctx.fillText(sp.name, ex + 7, y + 4);
+        const lw = ctx.measureText(sp.name).width;
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.fillStyle = Evo.NICHE_COLORS[sp.niche] || '#7d8a9b';
+        ctx.fillText(sp.niche + (sp.centroid.nocturnal > 0.66 ? ' 🌙' : ''), ex + 12 + lw, y + 4);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Time axis in years, with an icon for every random event.
+    paintAxis(sim, W, dpr) {
+      const ax = this.axis, AH = 26;
       if (ax.width !== Math.round(W * dpr) || ax.height !== Math.round(AH * dpr)) { ax.width = Math.round(W * dpr); ax.height = Math.round(AH * dpr); ax.style.height = AH + 'px'; }
-      let ctx = ax.getContext('2d');
+      const ctx = ax.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, AH);
       ctx.font = '11px system-ui, sans-serif';
@@ -151,107 +264,38 @@
       }
       ctx.textAlign = 'right';
       ctx.fillText('now', this.x(this.tMax), 24);
-      const log = (sim.disasters && sim.disasters.log) || [];
       ctx.textAlign = 'center';
-      for (const e of log) ctx.fillText(Evo.Events.TYPES[e.kind].icon, this.x(e.start), 24);
-
-      // ---- the tree
-      const cv = this.canvas;
-      cv.style.height = H + 'px';
-      if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
-      ctx = cv.getContext('2d');
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, W, H);
-
-      // Random events as shaded bands.
-      for (const e of log) {
-        ctx.fillStyle = EVENT_COLORS[e.kind];
-        const x0 = this.x(e.start), x1 = this.x(Math.min(e.end, this.tMax));
-        ctx.fillRect(x0, 0, Math.max(2, x1 - x0), H);
-      }
-
-      let maxV = 1;
-      for (const sp of rows) if (sp.pop) for (const v of sp.pop.v) if (v > maxV) maxV = v;
-      const half = (v) => (v > 0 ? 1.2 + 7 * Math.sqrt(v / maxV) : 0);
-      const rowOf = new Map(rows.map((sp, i) => [sp.id, i]));
-      const yOf = (i) => TOP + i * ROW + ROW / 2;
-      const every = sim.treeEvery || 5;
-
-      rows.forEach((sp, i) => {
-        const y = yOf(i);
-        const alive = sp.count > 0;
-        const end = alive ? this.tMax : sp.extinctAt !== null ? sp.extinctAt : this.tMax;
-        const dim = related && !related.has(sp.id);
-        ctx.globalAlpha = dim ? 0.18 : alive ? 1 : 0.6;
-
-        // Branch from the parent's band.
-        const pr = rowOf.get(sp.parentId);
-        if (pr !== undefined) {
-          const bx = this.x(sp.born);
-          ctx.strokeStyle = sp.color;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(bx, yOf(pr));
-          ctx.lineTo(bx, y);
-          ctx.stroke();
-        }
-
-        // The band: population over time (or a thin line for old saves).
-        ctx.fillStyle = sp.color;
-        const p = sp.pop;
-        if (p && p.v.length) {
-          ctx.beginPath();
-          const pts = [];
-          pts.push([sp.born, 1.2]);
-          for (let j = 0; j < p.v.length; j++) {
-            const t = (p.i0 + j) * every;
-            if (t > sp.born && t < end) pts.push([t, half(p.v[j])]);
-          }
-          pts.push([end, alive ? half(sp.count) : 1.2]);
-          ctx.moveTo(this.x(pts[0][0]), y - pts[0][1]);
-          for (const [t, h] of pts) ctx.lineTo(this.x(t), y - h);
-          for (let k = pts.length - 1; k >= 0; k--) ctx.lineTo(this.x(pts[k][0]), y + pts[k][1]);
-          ctx.closePath();
-          ctx.fill();
-        } else {
-          ctx.fillRect(this.x(sp.born), y - 1.5, Math.max(2, this.x(end) - this.x(sp.born)), 3);
-        }
-
-        // Label at the end of the band.
-        const ex = this.x(end);
-        if (!alive) {
-          ctx.strokeStyle = sp.color;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.moveTo(ex + 2, y - 4); ctx.lineTo(ex + 2, y + 4); ctx.stroke();
-        }
-        ctx.font = `${sp === this.hover ? '600 ' : ''}12px system-ui, sans-serif`;
-        ctx.textAlign = 'left';
-        ctx.fillStyle = alive ? '#e8edf3' : '#8a96a6';
-        const label = `${sp.name}`;
-        ctx.fillText(label, ex + 7, y + 4);
-        const lw = ctx.measureText(label).width;
-        ctx.font = '11px system-ui, sans-serif';
-        ctx.fillStyle = Evo.NICHE_COLORS[sp.niche] || '#7d8a9b';
-        ctx.fillText(sp.niche + (sp.centroid.nocturnal > 0.66 ? ' 🌙' : ''), ex + 12 + lw, y + 4);
-      });
-      ctx.globalAlpha = 1;
+      for (const e of (sim.disasters && sim.disasters.log) || []) ctx.fillText(Evo.Events.TYPES[e.kind].icon, this.x(e.start), 24);
     }
 
-    isDescendant(sim, s, anc) {
-      for (let p = sim.species.get(s.parentId); p; p = sim.species.get(p.parentId)) if (p === anc) return true;
-      return false;
+    // The hovered species' ancestors and descendants stay bright.
+    findRelated() {
+      const sim = this.app.sim;
+      const rel = new Set();
+      for (let s = this.hover; s; s = sim.species.get(s.parentId)) rel.add(s.id);
+      const stack = [this.hover];
+      while (stack.length) for (const k of this.kids.get(stack.pop().id) || []) { rel.add(k.id); stack.push(k); }
+      this.related = rel;
+    }
+
+    setHover(sp, quiet) {
+      if (sp === this.hover) return;
+      this.hover = sp;
+      if (sp) this.findRelated();
+      else { this.related = null; this.tip.style.display = 'none'; }
+      if (!quiet) this.paint();
     }
 
     rowAt(e) {
       const r = this.canvas.getBoundingClientRect();
-      const i = Math.floor((e.clientY - r.top - TOP) / ROW);
+      const i = Math.floor((e.clientY - r.top + this.scroll.scrollTop - TOP) / ROW);
       return this.rows[i] || null;
     }
 
     onMove(e) {
       const sp = this.rowAt(e);
-      if (sp !== this.hover) { this.hover = sp; this.draw(); }
-      if (!sp) { this.tip.style.display = 'none'; return; }
+      this.setHover(sp);
+      if (!sp) return;
       const sim = this.app.sim;
       const parent = sp.parentId ? sim.species.get(sp.parentId) : null;
       const c = sp.centroid;
