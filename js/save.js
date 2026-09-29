@@ -84,6 +84,7 @@
       stats: sim.stats,
       history: sim.history,
       historyEvery: sim.historyEvery,
+      historyOldEvery: sim.historyOldEvery,
       nextSample: sim.nextSample,
       nextMigrationCheck: sim.nextMigrationCheck,
       missingSince: sim.missingSince,
@@ -146,7 +147,8 @@
     sim.pending = [];
     sim.stats = d.stats;
     sim.history = d.history || [];
-    sim.historyEvery = d.historyEvery || 1;
+    sim.historyEvery = 1; // older saves sampled less often as the run grew
+    sim.historyOldEvery = d.historyOldEvery || d.historyEvery || 1;
     sim.nextSample = d.nextSample || d.time;
     sim.nextMigrationCheck = d.nextMigrationCheck || d.time;
     sim.missingSince = d.missingSince || { herbivore: null, carnivore: null };

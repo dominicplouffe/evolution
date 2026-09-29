@@ -43,6 +43,8 @@
       this.metrics = metrics();
       this.metric = this.metrics[0];
       this.hoverX = null;
+      this.range = 0;
+      this.note = null;
       canvas.addEventListener('mousemove', (e) => {
         const r = canvas.getBoundingClientRect();
         this.hoverX = e.clientX - r.left;
@@ -63,6 +65,62 @@
         s.map((x) => `<span><span class="swatch" style="background:${x.color}"></span>${x.name}</span>`).join('');
     }
 
+    // `range`: seconds to show back from now (0 = the whole run).
+    setRange(range) {
+      this.range = range;
+      this.draw();
+    }
+
+    // Pick what to plot: the raw points if they fit, otherwise buckets of a
+    // "nice" game length (a day, a year, several years) holding the average and
+    // the low-high range of each series.
+    prepare(h, plotW) {
+      const tEnd = h[h.length - 1].t;
+      const tStart = this.range ? Math.max(h[0].t, tEnd - this.range) : h[0].t;
+      let lo = 0;
+      while (lo < h.length - 1 && h[lo].t < tStart) lo++;
+      const pts = h.slice(lo);
+      const series = this.metric.series;
+      const target = Math.max(20, Math.floor(plotW / 5));
+      if (pts.length <= target) {
+        return { tStart, tEnd, size: 0, rows: pts.map((p) => ({ t: p.t, t0: p.t, t1: p.t, v: series.map((s) => s.get(p)) })) };
+      }
+      const day = this.dayLength || 60, year = this.yearLength || 240;
+      const sizes = [5, 10, 30, day, 2 * day, year, 2 * year, 5 * year, 10 * year, 20 * year, 50 * year, 100 * year]
+        .filter((v, i, a) => v > 0 && a.indexOf(v) === i).sort((a, b) => a - b);
+      const span = tEnd - tStart;
+      const size = sizes.find((v) => span / v <= target) || sizes[sizes.length - 1];
+      const rows = [];
+      let cur = null;
+      for (const p of pts) {
+        const b = Math.floor(p.t / size);
+        if (!cur || cur.b !== b) {
+          cur = { b, t0: b * size, t1: (b + 1) * size, n: 0, sum: series.map(() => 0), min: series.map(() => Infinity), max: series.map(() => -Infinity) };
+          rows.push(cur);
+        }
+        cur.n++;
+        series.forEach((s, k) => {
+          const v = s.get(p);
+          cur.sum[k] += v;
+          if (v < cur.min[k]) cur.min[k] = v;
+          if (v > cur.max[k]) cur.max[k] = v;
+        });
+      }
+      for (const r of rows) {
+        r.v = r.sum.map((v) => v / r.n);
+        r.t = Math.min(tEnd, Math.max(tStart, (r.t0 + r.t1) / 2));
+      }
+      return { tStart, tEnd, size, rows };
+    }
+
+    bucketLabel(size) {
+      const day = this.dayLength || 60, year = this.yearLength || 240;
+      if (size % year === 0) return size === year ? 'year' : `${size / year} years`;
+      if (day && size % day === 0) return size === day ? 'day' : `${size / day} days`;
+      if (size % 60 === 0) return `${size / 60} min`;
+      return `${size} s`;
+    }
+
     draw(history) {
       if (history) this.history = history;
       const h = this.history;
@@ -78,11 +136,19 @@
 
       const pad = { l: 34, r: 6, t: 6, b: 16 };
       const series = this.metric.series;
+      const data = this.prepare(h, W - pad.l - pad.r);
+      const rows = data.rows;
+      const banded = data.size > 0;
+      if (this.note) this.note.textContent = banded ? `Averaged per ${this.bucketLabel(data.size)} · shaded: low–high` : '';
       let max = 0, min = Infinity;
-      for (const p of h) for (const s of series) { const v = s.get(p); if (v > max) max = v; if (v < min) min = v; }
+      for (const row of rows) for (let k = 0; k < series.length; k++) {
+        const hi = banded ? row.max[k] : row.v[k], lo = banded ? row.min[k] : row.v[k];
+        if (hi > max) max = hi;
+        if (lo < min) min = lo;
+      }
       if (this.metric.id.startsWith('gene:')) { min = Math.max(0, min - (max - min) * 0.2); } else min = 0;
       if (max - min < 1e-6) max = min + 1;
-      const t0 = h[0].t, t1 = h[h.length - 1].t;
+      const t0 = data.tStart, t1 = data.tEnd;
       const X = (t) => pad.l + ((t - t0) / (t1 - t0 || 1)) * (W - pad.l - pad.r);
       const Y = (v) => pad.t + (1 - (v - min) / (max - min)) * (H - pad.t - pad.b);
 
@@ -104,32 +170,49 @@
       ctx.textAlign = 'right';
       ctx.fillText(fmtTime(t1), W - pad.r, H - 3);
 
-      for (const s of series) {
+      // Low-high bands first, then the average lines on top.
+      if (banded) {
+        series.forEach((s, k) => {
+          ctx.fillStyle = s.color;
+          ctx.globalAlpha = 0.16;
+          ctx.beginPath();
+          rows.forEach((row, i) => { const x = X(row.t), y = Y(row.max[k]); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+          for (let i = rows.length - 1; i >= 0; i--) ctx.lineTo(X(rows[i].t), Y(rows[i].min[k]));
+          ctx.closePath();
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+      }
+      series.forEach((s, k) => {
         ctx.strokeStyle = s.color;
         ctx.lineWidth = 2;
         ctx.lineJoin = 'round';
         ctx.beginPath();
-        h.forEach((p, i) => { const x = X(p.t), y = Y(s.get(p)); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+        rows.forEach((row, i) => { const x = X(row.t), y = Y(row.v[k]); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
         ctx.stroke();
-      }
+      });
 
       // Hover crosshair + tooltip.
       if (this.hoverX !== null && this.hoverX >= pad.l) {
         const tt = t0 + ((this.hoverX - pad.l) / (W - pad.l - pad.r)) * (t1 - t0);
-        let best = h[0];
-        for (const p of h) if (Math.abs(p.t - tt) < Math.abs(best.t - tt)) best = p;
+        let best = rows[0];
+        for (const row of rows) if (Math.abs(row.t - tt) < Math.abs(best.t - tt)) best = row;
         const x = X(best.t);
         ctx.strokeStyle = 'rgba(255,255,255,0.35)';
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, H - pad.b); ctx.stroke();
-        for (const s of series) {
+        series.forEach((s, k) => {
           ctx.beginPath();
-          ctx.arc(x, Y(s.get(best)), 4, 0, Math.PI * 2);
+          ctx.arc(x, Y(best.v[k]), 4, 0, Math.PI * 2);
           ctx.fillStyle = s.color; ctx.fill();
           ctx.strokeStyle = '#141b26'; ctx.lineWidth = 2; ctx.stroke();
-        }
-        this.tip.innerHTML = `<div class="muted">${fmtTime(best.t)}</div>` + series.map((s) =>
-          `<div><span class="swatch" style="background:${s.color}"></span>${s.name}: <b>${s.get(best).toFixed(s.digits || 0)}</b></div>`).join('');
+        });
+        const when = banded ? `${fmtTime(Math.max(t0, best.t0))} – ${fmtTime(Math.min(t1, best.t1))} (average)` : fmtTime(best.t);
+        this.tip.innerHTML = `<div class="muted">${when}</div>` + series.map((s, k) => {
+          const d = s.digits || 0;
+          const range = banded ? ` <span class="muted">(${best.min[k].toFixed(d)}–${best.max[k].toFixed(d)})</span>` : '';
+          return `<div><span class="swatch" style="background:${s.color}"></span>${s.name}: <b>${best.v[k].toFixed(d)}</b>${range}</div>`;
+        }).join('');
         this.tip.style.display = 'block';
         const tw = this.tip.offsetWidth;
         this.tip.style.left = Math.min(W - tw, Math.max(0, x + 10 + tw > W ? x - tw - 10 : x + 10)) + 'px';

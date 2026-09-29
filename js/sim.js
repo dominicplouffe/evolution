@@ -27,6 +27,7 @@
       this.stats = { births: 0, deaths: 0, causes: {}, maxGeneration: 0, peakPopulation: 0 };
       this.history = [];
       this.historyEvery = 1;
+      this.historyOldEvery = 1; // spacing of history points older than 10 min
       this.nextSample = 0;
       this.nextMigrationCheck = 0;
       this.missingSince = { herbivore: null, carnivore: null };
@@ -255,11 +256,28 @@
         species: this.species.living().length,
         avg,
       });
-      // Keep the whole run but thin it out as it gets long.
-      if (this.history.length > 1200) {
-        this.history = this.history.filter((_, i) => i % 2 === 0);
-        this.historyEvery *= 2;
+      // Keep the whole run: the last 10 minutes at full detail, older points on
+      // an even time grid that gets coarser as the run grows.
+      if (this.history.length > 1500) this.thinHistory();
+    }
+
+    thinHistory() {
+      const recentFrom = this.time - 600;
+      let every = this.historyOldEvery || 1;
+      let old;
+      for (;;) {
+        old = [];
+        let cell = -Infinity;
+        for (const p of this.history) {
+          if (p.t >= recentFrom) break;
+          const c = Math.floor(p.t / every);
+          if (c !== cell) { old.push(p); cell = c; }
+        }
+        if (old.length <= 900) break;
+        every *= 2;
       }
+      this.historyOldEvery = every;
+      this.history = old.concat(this.history.filter((p) => p.t >= recentFrom));
     }
 
     logEvent(html, important) {

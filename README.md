@@ -27,7 +27,9 @@ No build step and no dependencies. Either:
 | Fit whole map | <kbd>0</kbd> (or <kbd>Home</kbd>), or the **Fit map** button |
 
 The side panel shows live stats, a history chart (population by diet, or the
-average of any gene over time), the selected creature's DNA, the list of living
+average of any gene over time; show the last 10 minutes, the last hour or the
+whole run, and long spans are averaged per day / year with the low–high range
+shaded), the selected creature's DNA, the list of living
 species (click one to follow a member; **🌳 Family tree** or <kbd>T</kbd> opens the
 family tree of every species so far, with their populations over time), a **Hall of fame** (oldest creature, most
 children, most kills, deepest generation, biggest, fastest, farthest travelled,

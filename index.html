@@ -92,12 +92,20 @@
 
       <details class="panel" id="panelHistory" open>
         <summary><h2>History</h2></summary>
-        <div class="row chart-pick"><select id="chartMetric"></select></div>
+        <div class="row chart-pick">
+          <select id="chartMetric"></select>
+          <select id="chartRange" title="How much of the run to show">
+            <option value="600">Last 10 min</option>
+            <option value="3600">Last hour</option>
+            <option value="0">Whole run</option>
+          </select>
+        </div>
         <div id="chartLegend" class="legend"></div>
         <div class="chart-wrap">
           <canvas id="chart"></canvas>
           <div id="chartTip" class="tip"></div>
         </div>
+        <div id="chartNote" class="muted small"></div>
       </details>
 
       <details class="panel" id="inspectorPanel" open>

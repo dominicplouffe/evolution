@@ -26,6 +26,7 @@
       this.canvas = $('#view');
       this.renderer = new Evo.Renderer(this.canvas);
       this.chart = new Evo.Chart($('#chart'), $('#chartTip'), $('#chartLegend'));
+      this.chart.note = $('#chartNote');
       this.cfg = loadSettings();
       this.speed = 1;
       this.paused = false;
@@ -360,6 +361,15 @@
         this.updateMapLegend();
       });
       $('#chartMetric').addEventListener('change', (e) => this.chart.setMetric(e.target.value));
+      // Chart range, remembered in this browser.
+      let range = '0';
+      try { range = localStorage.getItem('evolution.chartRange') || '0'; } catch (e) { /* default */ }
+      $('#chartRange').value = range;
+      this.chart.range = Number($('#chartRange').value) || 0;
+      $('#chartRange').addEventListener('change', (e) => {
+        this.chart.setRange(Number(e.target.value));
+        try { localStorage.setItem('evolution.chartRange', e.target.value); } catch (err) { /* ignore */ }
+      });
       $('#newWorld').addEventListener('click', () => { this.readSettings(); this.newWorld(); });
       $('#resetSettings').addEventListener('click', () => {
         this.cfg = Evo.defaultConfig();
@@ -544,7 +554,11 @@
 
       // Closed panels aren't redrawn (they catch up when opened).
       const open = (id) => $('#' + id).open;
-      if (open('panelHistory')) this.chart.draw(sim.history);
+      if (open('panelHistory')) {
+        this.chart.yearLength = sim.cfg.seasonLength;
+        this.chart.dayLength = sim.cfg.dayLength;
+        this.chart.draw(sim.history);
+      }
       if (!this.pressing) {
         if (open('inspectorPanel')) this.updateInspector();
         this.updateSpecies();
