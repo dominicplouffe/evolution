@@ -108,7 +108,7 @@
       const B = Evo.BIOMES;
       const winter = Evo.clamp((1 - w.season(this.sim.time)) * 0.8, 0, 0.5);
       const F = w.food;
-      const shift = w.cfg.climate + w.seasonSwing(this.sim.time);
+      const shift = w.climateShift() + w.seasonSwing(this.sim.time);
       for (let i = 0; i < w.biome.length; i++) {
         const b = B[w.biome[i]];
         const o = i * 4;
@@ -146,6 +146,36 @@
       }
       const sp = this.sim.species.get(c.species);
       return sp ? sp.color : '#ccc';
+    }
+
+    drawDisaster(e, ox, oy, time, z) {
+      const ctx = this.ctx;
+      if (e.x === undefined) return; // world-wide (ice age) or no place (plague)
+      const x = e.x + ox, y = e.y + oy;
+      const age = time - e.start;
+      ctx.save();
+      ctx.lineWidth = 2 / z;
+      ctx.setLineDash([10 / z, 6 / z]);
+      if (e.kind === 'drought') {
+        ctx.fillStyle = 'rgba(230, 140, 40, 0.22)';
+        ctx.beginPath(); ctx.arc(x, y, e.r, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(240, 170, 70, 0.7)';
+        ctx.beginPath(); ctx.arc(x, y, e.r, 0, Math.PI * 2); ctx.stroke();
+      } else if (e.kind === 'meteor') {
+        const fade = Math.max(0, 1 - age / (e.end - e.start));
+        // Fires for the first 20 s, then a dark crater with a fertile ring.
+        ctx.fillStyle = age < 20 ? `rgba(255, ${Math.floor(90 + 60 * Math.sin(age * 6))}, 20, ${0.55 * (1 - age / 20) + 0.2})` : `rgba(40, 30, 25, ${0.5 * fade})`;
+        ctx.beginPath(); ctx.arc(x, y, e.r, 0, Math.PI * 2); ctx.fill();
+        if (age >= 20) {
+          ctx.strokeStyle = `rgba(120, 230, 90, ${0.3 + 0.5 * fade})`;
+          ctx.beginPath(); ctx.arc(x, y, e.fertileR, 0, Math.PI * 2); ctx.stroke();
+        }
+      } else if (e.kind === 'invaders') {
+        const f = age / 30;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 * (1 - f)})`;
+        ctx.beginPath(); ctx.arc(x, y, 60 + 80 * f, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.restore();
     }
 
     draw(selected, hoverWorld) {
@@ -192,7 +222,11 @@
       }
 
       const detailed = z > 0.35;
+      const disasters = sim.disasters ? sim.disasters.active : [];
       for (const [ox, oy] of offsets) {
+        // Random events: drought zones, meteor craters, invader landings.
+        for (const e of disasters) this.drawDisaster(e, ox, oy, sim.time, z);
+
         // Corpses.
         ctx.fillStyle = 'rgba(120, 30, 30, 0.85)';
         for (const c of w.corpses) {
@@ -215,6 +249,13 @@
           // Keep creatures visible when zoomed out.
           const r = Math.max(c.phen.radius, 3.5 / z);
           if (x < vx0 - r || x > vx1 + r || y < vy0 - r || y > vy1 + r) continue;
+          if (c.infected) { // plague: purple halo
+            ctx.beginPath();
+            ctx.arc(x, y, r + 3 / z + 1, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(190, 90, 255, 0.95)';
+            ctx.lineWidth = 2 / z;
+            ctx.stroke();
+          }
           ctx.fillStyle = this.creatureColor(c);
           if (!detailed) {
             ctx.fillRect(x - r, y - r, r * 2, r * 2);

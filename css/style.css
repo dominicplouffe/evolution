@@ -127,3 +127,4 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
   #hud { top: auto; bottom: 8px; }
   #toast { bottom: 110px; }
 }
+#hud .event-tag { color: #f0c070; }

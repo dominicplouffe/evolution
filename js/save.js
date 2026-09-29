@@ -13,7 +13,7 @@
   const CREATURE_FIELDS = [
     'id', 'x', 'y', 'heading', 'v', 'age', 'grow', 'health', 'energy', 'stamina', 'stomach', 'stomachCal',
     'hungry', 'exhausted', 'species', 'generation', 'parentIds', 'children', 'kills', 'reproCooldown',
-    'mateSearch', 'huntCooldown', 'bornAt', 'herdSize', 'growStart', 'travelled',
+    'mateSearch', 'huntCooldown', 'bornAt', 'herdSize', 'growStart', 'travelled', 'infected', 'immune',
   ];
   const KEEP_STATES = new Set(['Wandering', 'Resting', 'Digesting', 'Eating']);
 
@@ -89,6 +89,7 @@
       missingSince: sim.missingSince,
       events: sim.events,
       fame: sim.fame,
+      disasters: sim.disasters || null,
     };
   }
 
@@ -163,6 +164,7 @@
       return c;
     });
     Evo.Creature.setNextId(Math.max(d.nextCreatureId || 1, ...sim.creatures.map((c) => c.id + 1)));
+    if (d.disasters) { sim.disasters = d.disasters; Evo.Events.applyEffects(sim); }
     sim.rng.state = d.rng; // restore last, after the constructors above drew numbers
     return sim;
   }

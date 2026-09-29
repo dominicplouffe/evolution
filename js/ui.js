@@ -41,6 +41,7 @@
       this.bindControls();
       this.bindCanvas();
       this.bindSave();
+      this.bindDisasters();
       this.lastUi = 0;
       this.start();
     }
@@ -88,6 +89,20 @@
     }
 
     // ------------------------------------------------------------ save / load
+    // Buttons that start a random event right away.
+    bindDisasters() {
+      const box = $('#disasterButtons');
+      box.innerHTML = Evo.Events.KINDS.map((k) => `<button data-kind="${k}">${Evo.Events.TYPES[k].icon} ${Evo.Events.TYPES[k].label}</button>`).join('');
+      box.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        const kind = b.dataset.kind;
+        const ev = Evo.Events.start(this.sim, kind);
+        if (!ev) this.toast(kind === 'plague' ? 'No species is big enough for a plague (20+ members)' : `A ${Evo.Events.TYPES[kind].label.toLowerCase()} is already happening`);
+        this.updateUI(true);
+      });
+    }
+
     bindSave() {
       let auto = true;
       try { auto = localStorage.getItem('evolution.autosave') !== 'off'; } catch (e) { /* default on */ }
@@ -398,7 +413,7 @@
       form.onchange = () => {
         this.readSettings();
         // Some settings can change on the fly.
-        for (const k of ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration', 'neuralBrains', 'brainMutation']) {
+        for (const k of ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration', 'neuralBrains', 'brainMutation', 'eventRate', 'climate']) {
           this.sim.cfg[k] = this.cfg[k];
         }
       };
@@ -469,6 +484,14 @@
           species' average, or when it has clearly moved into a different niche, like a grazer's calf that has become a
           browser. Each species has one colour, so you can follow it on the map. Because mates must be similar,
           diverged species stop interbreeding and stay separate. ⭐ in the event log marks a brand-new niche.</li>
+          <li><b>Random events</b> shake things up every year or two (<b>Random events ×</b> in World settings; 0 turns
+          them off, and the buttons in the Events panel start one right away).
+          🏜️ <b>Drought</b>: plants wither in a large region (orange circle), so animals must move or starve.
+          ❄️ <b>Ice age</b>: the whole world cools by 6–10 °C for 2–3 years; fur pays off.
+          ☄️ <b>Meteor</b>: kills everything in the crater and burns the plants; the ash later makes a lush ring (green).
+          🦠 <b>Plague</b>: strikes the most numerous species (purple halo = sick) and spreads to close herd-mates;
+          herding creatures catch it more, unusual DNA resists it, and survivors are immune.
+          🐾 <b>Invaders</b>: a group of a brand-new, very different species walks in.</li>
         </ul>
         <p><b>Genes</b></p>
         <ul>${Evo.GENES.map((g) => `<li><b>${esc(g.label)}</b> — ${esc(g.desc)}</li>`).join('')}</ul>`;
@@ -491,7 +514,7 @@
       const season = sim.seasonName();
       const icon = { Spring: '🌱', Summer: '☀️', Autumn: '🍂', Winter: '❄️' }[season];
       const rate = this.paused ? 'paused' : `${fmt(this.simRate.rate, 1)}× speed`;
-      $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}<br><span class="muted">${rate} · seed ${sim.seed}</span>${this.hover ? `<br>🌡 ${fmt(sim.world.tempAtPoint(this.wrapPoint(this.hover).x, this.wrapPoint(this.hover).y, sim.time))} °C here` : ''}<br><span class="muted small">v${Evo.VERSION.number} · ${Evo.VERSION.date}</span>`;
+      $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}<br><span class="muted">${rate} · seed ${sim.seed}</span>${this.hover ? `<br>🌡 ${fmt(sim.world.tempAtPoint(this.wrapPoint(this.hover).x, this.wrapPoint(this.hover).y, sim.time))} °C here` : ''}${this.disasterHud(sim)}<br><span class="muted small">v${Evo.VERSION.number} · ${Evo.VERSION.date}</span>`;
 
       this.chart.draw(sim.history);
       if (!this.pressing) {
@@ -506,6 +529,17 @@
         this.announcedExtinction = true;
         this.toast('Everything died out. Start a new world from the settings panel.');
       } else if (n > 0) this.announcedExtinction = false;
+    }
+
+    // Active random events with the time left, for the corner display.
+    disasterHud(sim) {
+      const act = sim.disasters ? sim.disasters.active : [];
+      return act.map((e) => {
+        const T = Evo.Events.TYPES[e.kind];
+        const left = Math.max(0, e.end - sim.time);
+        const extra = e.kind === 'iceAge' ? ` ${fmt(e.depth)} °C` : '';
+        return `<br><span class="event-tag">${T.icon} ${T.label}${extra} · ${Evo.fmtTime(left)} left</span>`;
+      }).join('');
     }
 
     updateFame() {

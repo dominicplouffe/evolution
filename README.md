@@ -30,7 +30,7 @@ average of any gene over time), the selected creature's DNA, the list of living
 species (click one to follow a member), a **Hall of fame** (oldest creature, most
 children, most kills, deepest generation, biggest, fastest, farthest travelled,
 longest-lasting and biggest species; click a living record holder to follow it)
-and an event log (new species, extinctions, new record holders).
+and an event log (new species, extinctions, new record holders, random events).
 **World settings** lets you change the map size, water level, wrap-around edges,
 starting populations, plant growth, mutation rate, seasons and more.
 
@@ -113,6 +113,20 @@ starting populations, plant growth, mutation rate, seasons and more.
   mates), so once groups diverge they stop interbreeding and stay separate. Predators compete for prey
   and herds spot danger earlier ("many eyes"), which keeps predator booms from
   wiping out every herbivore type.
+- **Random events** (`js/events.js`): every year or two something happens
+  (**World settings → Random events ×** sets how often; 0 turns them off, and
+  the buttons in the Events panel start one right away):
+  - 🏜️ **Drought**: plants wither in a large region (orange circle) for about a year.
+  - ❄️ **Ice age**: the whole world cools by 6–10 °C for 2–3 years, then warms again.
+  - ☄️ **Meteor**: kills everything in the crater and burns its plants; after the
+    fires, the ash makes a lush, extra-fertile ring (green) until it grows back.
+  - 🦠 **Plague**: strikes the most numerous species (sick creatures get a purple
+    halo, lose health and pass it to nearby members of their species). Herding
+    creatures catch it more, creatures with unusual DNA resist it, and survivors
+    are immune.
+  - 🐾 **Invaders**: a group of 16 creatures of a brand-new, very different
+    species (plant- or meat-eaters, dressed for the local climate) walks in.
+  Active events show in the corner with the time left, and are kept in saves.
 - **Migration** (optional): if all plant-eaters or all meat-eaters die out, a small
   group wanders in after 30 s so the world can recover.
 
@@ -130,6 +144,7 @@ js/world.js         terrain, plants, carcasses, spatial hash, wrap-around
 js/creature.js      creature state + behaviour
 js/sim.js           simulation loop, births, deaths, stats, migration
 js/fame.js          Hall of fame records
+js/events.js        random events: drought, ice age, meteor, plague, invaders
 js/save.js          save/load: browser storage (gzipped) and .json files
 js/renderer.js      canvas drawing + camera
 js/chart.js         history chart

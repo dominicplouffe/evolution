@@ -138,7 +138,12 @@
     // Temperature (°C) of a tile right now: its base, the season, and the
     // Climate setting. Seasons swing it by about ±12 °C at default strength.
     tempAt(i, time) {
-      return this.tempBase[i] + this.cfg.climate + this.seasonSwing(time);
+      return this.tempBase[i] + this.climateShift() + this.seasonSwing(time);
+    }
+
+    // The Climate setting plus any temporary shift from events (ice age).
+    climateShift() {
+      return this.cfg.climate + (this.extraTemp || 0);
     }
 
     seasonSwing(time) {
@@ -239,8 +244,12 @@
       // their food for minutes. A tile's max encodes its fertility.
       const g = (Evo.K.PLANT_REGROW * this.cfg.plantGrowth * this.season(time) * dt) / Evo.K.PLANT_MAX;
       // Plants grow slower in the cold and stop in hard frost (below -3 °C).
-      const shift = this.cfg.climate + this.seasonSwing(time);
+      const shift = this.climateShift() + this.seasonSwing(time);
       const tb = this.tempBase;
+      // Events (drought, fertile ash) can scale growth per tile; very low
+      // growth also makes existing plants wither.
+      const gm = this.growthMul;
+      const wither = 1 - 0.01 * dt;
       for (const f of FOODS) {
         const amt = this.food[f.key].amt, max = this.food[f.key].max;
         for (let i = 0; i < amt.length; i++) {
@@ -250,7 +259,11 @@
           if (t <= -3) continue;
           const warm = t >= 10 ? 1 : (t + 3) / 13;
           const p = amt[i] / m;
-          amt[i] = Math.min(m, amt[i] + g * warm * m * (1 - 0.6 * p));
+          if (gm) {
+            const k = gm[i];
+            if (k < 0.5) amt[i] *= wither;
+            amt[i] = Math.min(m, amt[i] + g * warm * k * m * (1 - 0.6 * p));
+          } else amt[i] = Math.min(m, amt[i] + g * warm * m * (1 - 0.6 * p));
         }
       }
       // Corpses rot away.

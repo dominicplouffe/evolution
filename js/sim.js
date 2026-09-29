@@ -155,6 +155,7 @@
       this.world.step(dt, this.time);
       this.hash.rebuild(this.creatures);
       this.world.lastTime = this.time;
+      Evo.Events.step(this, dt); // droughts, ice ages, meteors, plagues, invaders
       for (let i = 0; i < this.creatures.length; i++) this.creatures[i].updateStealth(this.world, this.time);
       for (let i = 0; i < this.creatures.length; i++) {
         const c = this.creatures[i];

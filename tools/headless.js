@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-for (const f of ['rng', 'config', 'brain', 'genome', 'world', 'creature', 'fame', 'sim']) {
+for (const f of ['rng', 'config', 'brain', 'genome', 'world', 'creature', 'fame', 'events', 'sim']) {
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'js', f + '.js'), 'utf8'), { filename: f + '.js' });
 }
 const Evo = globalThis.Evo;

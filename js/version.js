@@ -2,5 +2,5 @@
 // Bump this with every change that ships to main.
 (function (Evo) {
   'use strict';
-  Evo.VERSION = { number: '0.10.0', date: '2026-09-27' };
+  Evo.VERSION = { number: '0.11.0', date: '2026-09-29' };
 })((globalThis.Evo = globalThis.Evo || {}));
