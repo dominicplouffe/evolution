@@ -24,6 +24,8 @@
       this.creatures = [];
       this.pending = [];
       this.time = 0;
+      this.tick = 0; // steps taken (time = tick × DT)
+      this.nextPrune = 600;
       this.stats = { births: 0, deaths: 0, causes: {}, maxGeneration: 0, peakPopulation: 0 };
       this.history = [];
       this.historyEvery = 1;
@@ -63,6 +65,24 @@
       c.age = 0;
       this.flush();
       return c;
+    }
+
+    // God tools: refill the plants, or strike down every creature, in a circle.
+    growFood(x, y, r) {
+      const w = this.world, T = Evo.K.TILE, n = Math.ceil(r / T);
+      for (let dy = -n; dy <= n; dy++) {
+        for (let dx = -n; dx <= n; dx++) {
+          if (Math.hypot(dx, dy) * T > r) continue;
+          const i = w.tileIndex(x + dx * T, y + dy * T);
+          if (i >= 0) for (const f of Evo.FOODS) w.food[f.key].amt[i] = w.food[f.key].max[i];
+        }
+      }
+    }
+
+    smite(x, y, r) {
+      this.hash.rebuild(this.creatures);
+      this.hash.query(x, y, r, (c) => this.kill(c, 'smitten'));
+      this.creatures = this.creatures.filter((c) => c.alive);
     }
 
     // Drop copies of an existing creature's DNA nearby (inspector "Clone").
@@ -152,7 +172,9 @@
 
     step() {
       const dt = Evo.K.DT;
-      this.time += dt;
+      // Time is a whole number of ticks, so it can't drift over months of running.
+      this.tick = (this.tick || Math.round(this.time / dt)) + 1;
+      this.time = this.tick * dt;
       this.world.step(dt, this.time);
       this.hash.rebuild(this.creatures);
       this.world.lastTime = this.time;
@@ -243,6 +265,10 @@
         }
       }
       Evo.Tree.sample(this); // population history for the family tree
+      if (this.time >= (this.nextPrune || 0)) {
+        this.nextPrune = this.time + 600;
+        this.pruneSpecies();
+      }
       const n = this.creatures.length;
       let drift = 0;
       for (const c of this.creatures) drift += Evo.Brain.drift(c.g.brain);
@@ -259,6 +285,35 @@
       // Keep the whole run: the last 10 minutes at full detail, older points on
       // an even time grid that gets coarser as the run grows.
       if (this.history.length > 1500) this.thinHistory();
+    }
+
+    // Keep the species archive bounded on very long runs: forget small species
+    // that died out over an hour ago and left no descendants (repeated calls
+    // trim dead-end branches from the tips). Above MAX, the oldest dead ends go
+    // regardless of size.
+    pruneSpecies(max = 3000) {
+      const byId = this.species.byId;
+      const parents = new Set();
+      for (const sp of byId.values()) if (sp.parentId) parents.add(sp.parentId);
+      const keep = new Set([this.herbivoreSpecies.id, this.carnivoreSpecies.id]);
+      const deadEnds = [];
+      for (const sp of byId.values()) {
+        if (sp.count > 0 || sp.extinctAt === null || parents.has(sp.id) || keep.has(sp.id)) continue;
+        deadEnds.push(sp);
+      }
+      let removed = 0;
+      for (const sp of deadEnds) {
+        if (sp.peak < 20 && this.time - sp.extinctAt > 3600) { byId.delete(sp.id); removed++; }
+      }
+      if (byId.size > max) {
+        const rest = deadEnds.filter((sp) => byId.has(sp.id)).sort((a, b) => a.extinctAt - b.extinctAt);
+        for (const sp of rest) {
+          if (byId.size <= max) break;
+          byId.delete(sp.id);
+          removed++;
+        }
+      }
+      return removed;
     }
 
     thinHistory() {
@@ -281,8 +336,10 @@
     }
 
     logEvent(html, important) {
-      this.events.unshift({ t: this.time, html, important: !!important });
+      const entry = { t: this.time, html, important: !!important };
+      this.events.unshift(entry);
       if (this.events.length > 60) this.events.length = 60;
+      if (this.onLog) this.onLog(entry); // the server keeps a permanent chronicle
     }
 
     seasonName() {

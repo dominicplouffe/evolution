@@ -12,6 +12,65 @@ No build step and no dependencies. Either:
 - double-click `index.html`, or
 - serve the folder: `python3 -m http.server 8000`, then open <http://localhost:8000>
 
+## Run it 24/7 on a server
+
+The world can run for months on a Linux server while you watch it from any
+browser (a Raspberry Pi, a laptop, your phone). The server uses the same
+simulation code, needs only **Node.js 18+**, and has no other dependencies.
+
+```sh
+git clone https://github.com/dominicplouffe/evolution.git /opt/evolution
+cd /opt/evolution
+node server/server.js --port 8080 --data ./data     # try it in the foreground
+```
+
+Then open `http://<server>:8080/` on the Pi (for a full-screen display:
+`chromium-browser --kiosk http://<server>:8080/`). The page notices it's talking
+to the server and becomes a live **viewer**. Everything works as usual, but the
+world lives on the server. Closing the browser doesn't stop it, and several
+screens can watch at once. The god tools, random events, settings and
+**New world** all act on the server's world.
+
+**Speed and CPU:** in the Simulation panel, the speed buttons set the target
+speed (**Max** = as fast as possible), and **Server CPU budget** caps how much of
+one CPU core the world may use. The world runs at the target speed unless that
+would exceed the budget, in which case it slows down to fit. Below the controls
+you see the real speed, CPU use, time per step, memory and the last save. Both
+settings are remembered across restarts.
+
+**Keeping it running for months:**
+- Run it as a service so it starts at boot and restarts after a crash:
+  `server/evolution.service` is a ready-made systemd unit (see the comments in
+  it). It runs at low priority (`nice`) and saves before stopping.
+- **Snapshots** every 5 minutes (`--snapshot N` to change), written to a
+  temporary file and renamed, so a crash or power cut never leaves a broken
+  save. The previous snapshot is kept too, plus **backups**: hourly (last 48),
+  daily (last 60) and weekly (last 104) in `data/backups/`.
+- On start it resumes the newest snapshot that loads and passes the checks,
+  falling back to older ones if needed.
+- A **watchdog** checks the world every 10 s (impossible values like NaN
+  positions). If something is wrong, or the simulation crashes, it rolls back
+  to the last good snapshot and notes it in the chronicle. After 6 problems in
+  an hour it pauses and shows the error in the viewer instead of looping.
+  If every creature dies, fresh founders arrive.
+- Long-run limits: small species that died out over an hour ago and left no
+  descendants are pruned from the archive (at most 3000 kept), the history
+  chart keeps full detail for the last 10 minutes and an even, coarser grid
+  before that, and time is counted in whole steps so it never drifts.
+- **Chronicle**: every logged event is appended to `data/chronicle.jsonl`
+  forever. **📜 Full chronicle** in the Events panel shows it.
+- **Save now**, **Export** (download the world) and **Import** (replace the
+  server's world with a file; the old one stays in the backups) are in the
+  Save & load panel.
+
+Options: `--port`, `--host`, `--data`, `--snapshot` (minutes), and `--speed` /
+`--budget` for the first run (or the same names as `EVO_PORT`, `EVO_DATA`...
+environment variables). Set `EVO_TOKEN=secret` to require a token: open the
+viewer once with `http://<server>:8080/?token=secret` and it remembers it.
+Don't expose the port to the internet without one. `node tools/soak.js 24`
+runs 24 simulated hours as fast as possible and reports what grows, to check
+a change before trusting it with a long run.
+
 ## Controls
 
 | Action | How |
@@ -167,7 +226,12 @@ js/save.js          save/load: browser storage (gzipped) and .json files
 js/renderer.js      canvas drawing + camera
 js/chart.js         history chart
 js/ui.js            input, panels, game loop
+js/remote.js        viewer mode: mirror of a server world, live stream, commands
+server/server.js    the 24/7 server: HTTP, live stream, commands, static files
+server/runner.js    pacing (speed + CPU budget), snapshots, backups, watchdog
+server/evolution.service  systemd unit to run it as a service
 tools/headless.js   run the sim in Node without a browser (for balancing)
+tools/soak.js       long accelerated run that reports memory and data growth
 ```
 
 Balancing tip: `node tools/headless.js 1200 42` runs 20 simulated minutes with

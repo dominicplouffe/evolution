@@ -50,6 +50,28 @@
 
     // Continue the saved world if there is one, otherwise start fresh.
     async start() {
+      // Served by the Evolution server? Then watch and control its world.
+      const remote = Evo.Remote ? await Evo.Remote.detect() : false;
+      if (remote === 'token') {
+        this.toast('This server needs a token: open the page with ?token=…');
+        return;
+      }
+      if (remote) {
+        try {
+          this.remote = new Evo.Remote(this);
+          const sim = await this.remote.connect();
+          this.enterRemoteMode();
+          this.useSim(sim, true);
+          this.toast('Connected to the world on the server');
+          this.last = performance.now();
+          requestAnimationFrame((t) => this.frame(t));
+          return;
+        } catch (e) {
+          console.warn('Could not connect to the server', e);
+          this.remote = null;
+          this.toast('Could not connect to the server, running a local world');
+        }
+      }
       let resumed = false;
       if (Evo.Save.storageInfo()) {
         try {
@@ -67,6 +89,44 @@
       if (!resumed) this.newWorld();
       this.last = performance.now();
       requestAnimationFrame((t) => this.frame(t));
+    }
+
+    // Viewer for the Evolution server: the panels show server controls.
+    enterRemoteMode() {
+      $('#serverBox').hidden = false;
+      $('#loadBtn').hidden = true;
+      $('.save-auto').hidden = true;
+      $('#saveBtn').textContent = '💾 Save now';
+      $('#saveBtn').title = 'Snapshot the world on the server now';
+      $('#exportBtn').title = 'Download the server world as a file';
+      $('#importBtn').title = 'Replace the server world with a file you exported';
+      $('#chronicleLink').hidden = false;
+      $('#chronicleLink').href = this.remote.chronicleUrl();
+      $('#speeds button[data-speed="32"]').title = 'As fast as the CPU budget allows';
+      const budget = $('#cpuBudget');
+      budget.addEventListener('input', () => { $('#cpuBudgetVal').textContent = budget.value + '%'; });
+      budget.addEventListener('change', () => this.remote.cmd({ cmd: 'budget', value: Number(budget.value) / 100 }));
+      document.title = 'Evolution · server';
+    }
+
+    // Show the server's speed, CPU use and saves; follow changes made from
+    // another viewer.
+    updateServerStatus() {
+      const s = this.remote.status;
+      if (!s) return;
+      this.paused = s.paused;
+      $('#playPause').textContent = s.paused ? '▶ Play' : '⏸ Pause';
+      const target = s.speed === 'max' ? 32 : s.speed;
+      document.querySelectorAll('#speeds button').forEach((b) => b.classList.toggle('active', Number(b.dataset.speed) === target));
+      const budget = $('#cpuBudget');
+      if (document.activeElement !== budget) { budget.value = Math.round(s.budget * 100); $('#cpuBudgetVal').textContent = budget.value + '%'; }
+      const ago = (ms) => { const m = Math.round(ms / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; };
+      const up = s.uptime > 86400 ? `${Math.floor(s.uptime / 86400)} d ${Math.floor((s.uptime % 86400) / 3600)} h` : `${Math.floor(s.uptime / 3600)} h ${Math.floor((s.uptime % 3600) / 60)} min`;
+      $('#serverStatus').innerHTML = (s.error ? `<span style="color:#e66">⚠️ ${esc(s.error)} (press Play to retry)</span><br>` : '') +
+        `Running at <b>${fmt(s.actualSpeed, 1)}×</b> (target ${s.speed === 'max' ? 'max' : s.speed + '×'}) · CPU ${Math.round(s.cpu * 100)}% · ${fmt(s.stepMs, 1)} ms/step<br>` +
+        `Up ${up} · ${s.memoryMB} MB · ${s.lastSave ? `saved ${ago(Date.now() - s.lastSave.at)} (${Math.round(s.lastSave.bytes / 1024)} KB)` : 'not saved yet'}` +
+        (this.remote.connected ? '' : '<br><span style="color:#e66">Connection lost, reconnecting…</span>');
+      this.setSaveStatus('The server saves every few minutes and keeps hourly, daily and weekly backups.');
     }
 
     newWorld() {
@@ -114,6 +174,7 @@
         const b = e.target.closest('button');
         if (!b) return;
         const kind = b.dataset.kind;
+        if (this.remote) { this.remote.cmd({ cmd: 'event', kind }); return; }
         const ev = Evo.Events.start(this.sim, kind);
         if (!ev) this.toast(kind === 'plague' ? 'No species is big enough for a plague (20+ members)' : `A ${Evo.Events.TYPES[kind].label.toLowerCase()} is already happening`);
         this.updateUI(true);
@@ -127,9 +188,10 @@
       $('#autosave').addEventListener('change', (e) => {
         try { localStorage.setItem('evolution.autosave', e.target.checked ? 'on' : 'off'); } catch (err) { /* ignore */ }
       });
-      $('#saveBtn').addEventListener('click', () => this.save(false));
+      $('#saveBtn').addEventListener('click', () => { if (this.remote) this.remote.cmd({ cmd: 'save' }); else this.save(false); });
       $('#loadBtn').addEventListener('click', () => this.loadSaved());
       $('#exportBtn').addEventListener('click', () => {
+        if (this.remote) { window.location.href = this.remote.exportUrl(); return; }
         Evo.Save.exportFile(this.sim);
         this.toast('World exported as a file');
       });
@@ -139,6 +201,12 @@
         e.target.value = '';
         if (!file) return;
         try {
+          if (this.remote) {
+            if (!window.confirm(`Replace the world on the server with ${file.name}? (The old one stays in the server backups.)`)) return;
+            const r = await this.remote.importFile(file);
+            this.toast(r.ok ? `Loaded ${file.name} on the server` : `The server refused it: ${r.message}`);
+            return;
+          }
           this.useSim(await Evo.Save.importFile(file), true);
           this.toast(`Loaded ${file.name}`);
         } catch (err) {
@@ -146,9 +214,9 @@
           this.toast("That file isn't a saved world");
         }
       });
-      setInterval(() => { if ($('#autosave').checked) this.save(true); }, 60000);
+      setInterval(() => { if (!this.remote && $('#autosave').checked) this.save(true); }, 60000);
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden' && $('#autosave').checked) this.save(true);
+        if (!this.remote && document.visibilityState === 'hidden' && $('#autosave').checked) this.save(true);
       });
       const info = Evo.Save.storageInfo();
       this.setSaveStatus(info ? 'A saved world is stored in this browser.' : 'Nothing saved yet.');
@@ -190,7 +258,8 @@
     frame(now) {
       const real = Math.min(0.1, (now - this.last) / 1000);
       this.last = now;
-      if (!this.paused) {
+      if (this.remote) this.remote.animate(now);
+      else if (!this.paused) {
         this.acc += real * this.speed;
         const start = performance.now();
         while (this.acc >= Evo.K.DT) {
@@ -283,29 +352,26 @@
         this.select(best);
       } else if (this.tool === 'herbivore' || this.tool === 'carnivore') {
         if (!w.wrap && (q.x < 0 || q.y < 0 || q.x >= w.width || q.y >= w.height)) return;
+        if (this.remote) { this.remote.cmd({ cmd: 'spawn', kind: this.tool, x: q.x, y: q.y }); return; }
         const c = this.sim.spawnAt(this.tool, q.x, q.y);
         if (!c) this.toast("Can't place a creature in deep water or on peaks");
       }
     }
 
     applyBrush(p) {
-      const w = this.sim.world;
       const q = this.wrapPoint(p);
-      if (this.tool === 'food') {
-        const T = Evo.K.TILE, n = Math.ceil(BRUSH / T);
-        for (let dy = -n; dy <= n; dy++) {
-          for (let dx = -n; dx <= n; dx++) {
-            if (Math.hypot(dx, dy) * T > BRUSH) continue;
-            const i = w.tileIndex(q.x + dx * T, q.y + dy * T);
-            if (i >= 0) for (const f of Evo.FOODS) w.food[f.key].amt[i] = w.food[f.key].max[i];
-          }
-        }
-        this.renderer.lastTerrain = -1;
-      } else if (this.tool === 'smite') {
-        this.sim.hash.rebuild(this.sim.creatures);
-        this.sim.hash.query(q.x, q.y, BRUSH, (c) => this.sim.kill(c, 'smitten'));
-        this.sim.creatures = this.sim.creatures.filter((c) => c.alive);
+      if (this.remote) {
+        // At most ~8 brush strokes a second go to the server.
+        const now = performance.now();
+        if (now - (this.lastBrush || 0) < 120) return;
+        this.lastBrush = now;
+        this.remote.cmd({ cmd: 'brush', tool: this.tool, x: q.x, y: q.y });
+        return;
       }
+      if (this.tool === 'food') {
+        this.sim.growFood(q.x, q.y, BRUSH);
+        this.renderer.lastTerrain = -1;
+      } else if (this.tool === 'smite') this.sim.smite(q.x, q.y, BRUSH);
     }
 
     // Select and follow a random living member of a species.
@@ -320,6 +386,7 @@
     select(c) {
       this.selected = c;
       if (!c) this.follow = false;
+      if (c && this.remote) this.remote.refreshDetail(c).then(() => this.updateInspector());
       this.updateInspector();
     }
 
@@ -330,6 +397,10 @@
     }
 
     setSpeed(s) {
+      if (this.remote) {
+        this.remote.cmd({ cmd: 'speed', speed: s >= 32 ? 'max' : s });
+        this.remoteSpeed = s;
+      }
       this.speed = s;
       document.querySelectorAll('#speeds button').forEach((b) => b.classList.toggle('active', Number(b.dataset.speed) === s));
       if (this.paused) this.togglePause();
@@ -342,6 +413,7 @@
 
     togglePause() {
       this.paused = !this.paused;
+      if (this.remote) this.remote.cmd({ cmd: 'pause', paused: this.paused });
       $('#playPause').textContent = this.paused ? '▶ Play' : '⏸ Pause';
     }
 
@@ -370,7 +442,14 @@
         this.chart.setRange(Number(e.target.value));
         try { localStorage.setItem('evolution.chartRange', e.target.value); } catch (err) { /* ignore */ }
       });
-      $('#newWorld').addEventListener('click', () => { this.readSettings(); this.newWorld(); });
+      $('#newWorld').addEventListener('click', () => {
+        this.readSettings();
+        if (this.remote) {
+          if (window.confirm('Replace the world on the server with a new one? (The old one stays in the server backups.)')) this.remote.cmd({ cmd: 'newWorld', cfg: this.cfg });
+          return;
+        }
+        this.newWorld();
+      });
       $('#resetSettings').addEventListener('click', () => {
         this.cfg = Evo.defaultConfig();
         saveSettings(this.cfg);
@@ -386,6 +465,10 @@
         const c = this.selected;
         if (!act || !c) return;
         if (act === 'follow') this.follow = !this.follow;
+        if (this.remote && (act === 'clone' || act === 'kill')) {
+          this.remote.cmd({ cmd: 'creature', id: c.id, act }).then((r) => { if (r.ok && act === 'clone') this.toast('Dropped 5 clones nearby'); });
+          return;
+        }
         if (act === 'clone' && c.alive) { this.sim.cloneNear(c, 5); this.toast('Dropped 5 clones nearby'); }
         if (act === 'kill' && c.alive) this.sim.kill(c, 'smitten');
         if (act === 'parent') {
@@ -444,9 +527,9 @@
       form.onchange = () => {
         this.readSettings();
         // Some settings can change on the fly.
-        for (const k of ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration', 'neuralBrains', 'brainMutation', 'eventRate', 'climate', 'dayLength']) {
-          this.sim.cfg[k] = this.cfg[k];
-        }
+        const live = ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration', 'neuralBrains', 'brainMutation', 'eventRate', 'climate', 'dayLength'];
+        if (this.remote) { this.remote.cmd({ cmd: 'settings', cfg: this.cfg }); return; }
+        for (const k of live) this.sim.cfg[k] = this.cfg[k];
       };
       form.onsubmit = (e) => e.preventDefault();
     }
@@ -549,7 +632,14 @@
 
       const season = sim.seasonName();
       const icon = { Spring: '🌱', Summer: '☀️', Autumn: '🍂', Winter: '❄️' }[season];
-      const rate = this.paused ? 'paused' : `${fmt(this.simRate.rate, 1)}× speed`;
+      let rate = this.paused ? 'paused' : `${fmt(this.simRate.rate, 1)}× speed`;
+      if (this.remote) {
+        this.updateServerStatus();
+        const s = this.remote.status;
+        rate = `🖥 ${!this.remote.connected ? 'reconnecting…' : s && s.paused ? 'paused' : `${fmt(s ? s.actualSpeed : 0, 1)}×`} on server`;
+        // Keep the selected creature's details fresh (every ~½ s).
+        if (this.selected && this.selected.alive && (this.detailTick = (this.detailTick || 0) + 1) % 2 === 0) this.remote.refreshDetail(this.selected);
+      }
       $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}${this.dayHud(sim)}<br><span class="muted">${rate} · seed ${sim.seed}</span>${this.hover ? `<br>🌡 ${fmt(sim.world.tempAtPoint(this.wrapPoint(this.hover).x, this.wrapPoint(this.hover).y, sim.time))} °C here` : ''}${this.disasterHud(sim)}<br><span class="muted small">v${Evo.VERSION.number} · ${Evo.VERSION.date}</span>`;
 
       // Closed panels aren't redrawn (they catch up when opened).

@@ -91,6 +91,8 @@
       events: sim.events,
       fame: sim.fame,
       disasters: sim.disasters || null,
+      tick: sim.tick,
+      nextPrune: sim.nextPrune,
       treeEvery: sim.treeEvery,
       treeNext: sim.treeNext,
     };
@@ -155,6 +157,8 @@
     sim.events = d.events || [];
     sim.fame = d.fame || {};
     sim.treeEvery = d.treeEvery;
+    sim.tick = d.tick || Math.round(d.time / Evo.K.DT);
+    sim.nextPrune = d.nextPrune || 0;
     sim.treeNext = d.treeNext;
 
     // Creatures: construct normally (fills in every field), then restore.
@@ -170,7 +174,13 @@
       return c;
     });
     Evo.Creature.setNextId(Math.max(d.nextCreatureId || 1, ...sim.creatures.map((c) => c.id + 1)));
-    if (d.disasters) { sim.disasters = d.disasters; Evo.Events.applyEffects(sim); }
+    if (d.disasters) {
+      sim.disasters = d.disasters;
+      // Active events and the log share objects (so end times stay in sync).
+      const log = sim.disasters.log || [];
+      sim.disasters.active = sim.disasters.active.map((e) => log.find((x) => x.id === e.id) || e);
+      Evo.Events.applyEffects(sim);
+    }
     sim.rng.state = d.rng; // restore last, after the constructors above drew numbers
     return sim;
   }

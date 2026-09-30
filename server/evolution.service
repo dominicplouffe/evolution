@@ -1,0 +1,33 @@
+# systemd service for the Evolution world server.
+#
+# Install (adjust the paths and the user first):
+#   sudo cp server/evolution.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now evolution
+# Logs:     journalctl -u evolution -f
+# Restart:  sudo systemctl restart evolution   (it saves before stopping)
+
+[Unit]
+Description=Evolution world server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=evolution
+WorkingDirectory=/opt/evolution
+# --speed / --budget only set the first-run values; after that the viewer's
+# choices are remembered in the data folder (server.json).
+ExecStart=/usr/bin/node server/server.js --port 8080 --data /var/lib/evolution
+# Optional: require a token (open the viewer once with ?token=YOUR_SECRET).
+#Environment=EVO_TOKEN=change-me
+Restart=always
+RestartSec=5
+# Give the world lower priority than everything else on the machine.
+Nice=10
+# Time to write the final snapshot on shutdown.
+TimeoutStopSec=60
+StateDirectory=evolution
+
+[Install]
+WantedBy=multi-user.target

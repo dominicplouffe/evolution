@@ -77,6 +77,7 @@
     }
     st.active.push(e);
     st.log.push(e); // same object, so its end time stays current
+    if (st.log.length > 500) st.log.splice(0, st.log.length - 500);
     applyEffects(sim);
     return e;
   }
