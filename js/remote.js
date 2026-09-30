@@ -172,8 +172,8 @@
         for (const d of list) {
           if (this.byId.has(d.id)) continue;
           const c = new Evo.Creature(sim, Evo.Genome.make(d.g), 0, 0, { species: d.species, adult: true });
-          this.applyDetail(c, d);
-          c.x = c.x1 = c.x0 = d.x !== undefined ? d.x : c.x;
+          this.applyDetail(c, d); // sets its position too
+          this.initMotion(c);
           this.byId.set(c.id, c);
           sim.creatures.push(c);
         }
@@ -201,6 +201,9 @@
       const w = this.sim.world;
       for (const c of this.sim.creatures) {
         if (c.x1 === undefined) continue;
+        // A missing start point (never expected) snaps to the target instead of
+        // hiding the creature for good.
+        if (!Number.isFinite(c.x0) || !Number.isFinite(c.y0)) { c.x0 = c.x1; c.y0 = c.y1; }
         c.x = c.x0 + w.dx(c.x0, c.x1) * f;
         c.y = c.y0 + w.dy(c.y0, c.y1) * f;
         if (w.wrap) w.wrapPos(c);
