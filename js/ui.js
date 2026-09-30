@@ -144,7 +144,7 @@
       const ago = (ms) => { const m = Math.round(ms / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; };
       const up = s.uptime > 86400 ? `${Math.floor(s.uptime / 86400)} d ${Math.floor((s.uptime % 86400) / 3600)} h` : `${Math.floor(s.uptime / 3600)} h ${Math.floor((s.uptime % 3600) / 60)} min`;
       $('#serverStatus').innerHTML = (s.error ? `<span style="color:#e66">⚠️ ${esc(s.error)} (press Play to retry)</span><br>` : '') +
-        `Running at <b>${fmt(s.actualSpeed, 1)}×</b> (target ${s.speed === 'max' ? 'max' : s.speed + '×'}) · CPU ${Math.round(s.cpu * 100)}% · ${fmt(s.stepMs, 1)} ms/step<br>` +
+        `Running at <b>${fmt(s.actualSpeed, 1)}×</b> (target ${s.speed === 'max' ? 'max' : s.speed + '×'}) · CPU ${Math.round(s.cpu * 100)}%${s.threads ? ` + ${s.threads} helper threads (${Math.round((s.cpuTotal || 0) * 100)}% in total)` : ''} · ${fmt(s.stepMs, 1)} ms/step<br>` +
         `Up ${up} · ${s.memoryMB} MB · ${s.lastSave ? `saved ${ago(Date.now() - s.lastSave.at)} (${Math.round(s.lastSave.bytes / 1024)} KB)` : 'not saved yet'}` +
         (this.remote.connected ? '' : '<br><span style="color:#e66">Connection lost, reconnecting…</span>');
       this.setSaveStatus('The server saves every few minutes and keeps hourly, daily and weekly backups.');

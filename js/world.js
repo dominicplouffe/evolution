@@ -23,22 +23,39 @@
     { id: 7, name: 'Peak', color: [225, 225, 230], lush: [225, 225, 230], food: {}, speed: 0, passable: false, cover: 0 },
   ];
 
+  // A grid of cells, each listing the items inside it. Stored flat (items
+  // sorted by cell, in their original order within a cell): cheap to rebuild
+  // every step and fast to scan.
   class SpatialHash {
     constructor(world, cellSize) {
       this.world = world;
       this.cell = cellSize;
       this.cols = Math.ceil(world.width / cellSize);
       this.rows = Math.ceil(world.height / cellSize);
-      this.buckets = new Array(this.cols * this.rows);
-      for (let i = 0; i < this.buckets.length; i++) this.buckets[i] = [];
+      this.start = new Int32Array(this.cols * this.rows + 1); // cell k: items[start[k] .. start[k+1])
+      this.cellOf = new Int32Array(64);
+      this.items = [];
     }
     rebuild(items) {
-      for (const b of this.buckets) b.length = 0;
-      for (const it of items) {
-        const cx = Evo.clamp(Math.floor(it.x / this.cell), 0, this.cols - 1);
-        const cy = Evo.clamp(Math.floor(it.y / this.cell), 0, this.rows - 1);
-        this.buckets[cy * this.cols + cx].push(it);
+      const n = items.length, cols = this.cols, rows = this.rows, c = this.cell;
+      if (this.cellOf.length < n) this.cellOf = new Int32Array(n * 2);
+      const cellOf = this.cellOf, start = this.start;
+      start.fill(0);
+      for (let i = 0; i < n; i++) {
+        const it = items[i];
+        let cx = Math.floor(it.x / c), cy = Math.floor(it.y / c);
+        cx = cx < 0 ? 0 : cx > cols - 1 ? cols - 1 : cx;
+        cy = cy < 0 ? 0 : cy > rows - 1 ? rows - 1 : cy;
+        const k = cy * cols + cx;
+        cellOf[i] = k;
+        start[k + 1]++;
       }
+      for (let k = 0; k < cols * rows; k++) start[k + 1] += start[k];
+      const out = this.items;
+      out.length = n;
+      const fill = this.fill && this.fill.length === start.length ? this.fill : (this.fill = new Int32Array(start.length));
+      fill.set(start);
+      for (let i = 0; i < n; i++) out[fill[cellOf[i]]++] = items[i];
     }
     // Calls fn(item, dx, dy, d2) for every item within radius r of (x, y).
     query(x, y, r, fn) {
@@ -61,9 +78,9 @@
             if (!w.wrap) continue;
             rx = ((rx % this.cols) + this.cols) % this.cols;
           }
-          const b = this.buckets[ry * this.cols + rx];
-          for (let i = 0; i < b.length; i++) {
-            const it = b[i];
+          const cell = ry * this.cols + rx, end = this.start[cell + 1], items = this.items;
+          for (let i = this.start[cell]; i < end; i++) {
+            const it = items[i];
             // Wrap-aware delta, inlined: this loop is the hottest in the game.
             let dx = it.x - x, dy = it.y - y;
             if (wrap) {

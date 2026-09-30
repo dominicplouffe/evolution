@@ -38,6 +38,17 @@ would exceed the budget, in which case it slows down to fit. Below the controls
 you see the real speed, CPU use, time per step, memory and the last save. Both
 settings are remembered across restarts.
 
+**Multiple CPU cores:** the server spreads the creatures' *deciding* (looking
+around, the brain, choosing what to do) over worker threads while the main
+thread moves, feeds and fights everyone: by default one thread per core minus
+one, at most 4 (`--threads N`, `0` = one core). Decisions are made on the world
+as it was one step (1/30 s) earlier, which doesn't change how the world plays.
+With about 4,400 creatures a step went from 19 ms to about 10 ms on a 4-core
+machine (most of the rest can't be split up safely: creatures eat, bite and
+breed with each other). The CPU budget paces the main thread; the Simulation
+panel shows the total CPU used by all threads. If a worker thread ever fails,
+the server notes it in the log and carries on with one core.
+
 **Keeping it running for months:**
 - Run it as a service so it starts at boot and restarts after a crash:
   `server/evolution.service` is a ready-made systemd unit (see the comments in
@@ -70,7 +81,8 @@ settings are remembered across restarts.
   server's world with a file; the old one stays in the backups) are in the
   Save & load panel.
 
-Options: `--port`, `--host`, `--data`, `--snapshot` (minutes), and `--speed` /
+Options: `--port`, `--host`, `--data`, `--snapshot` (minutes), `--timelapse`
+(minutes), `--threads`, and `--speed` /
 `--budget` for the first run (or the same names as `EVO_PORT`, `EVO_DATA`...
 environment variables). Set `EVO_TOKEN=secret` to require a token: open the
 viewer once with `http://<server>:8080/?token=secret` and it remembers it.
@@ -260,6 +272,9 @@ js/remote.js        viewer mode: mirror of a server world, live stream, commands
 server/server.js    the 24/7 server: HTTP, live stream, commands, static files
 server/runner.js    pacing (speed + CPU budget), snapshots, backups, watchdog
 server/timelapse.js map images for the time-lapse (tiny PNG encoder, thinning)
+server/thinkpool.js multi-core deciding: snapshot, worker threads, decisions
+server/thinkcore.js   ...the part that runs on each worker (same think() code)
+server/thinkworker.js ...the worker thread entry point
 server/evolution.service  systemd unit to run it as a service
 tools/headless.js   run the sim in Node without a browser (for balancing)
 tools/soak.js       long accelerated run that reports memory and data growth

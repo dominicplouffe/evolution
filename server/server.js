@@ -4,6 +4,8 @@
 //   node server/server.js [--port 8080] [--host 0.0.0.0] [--data ./data]
 //                         [--speed 1|max] [--budget 0.5] [--snapshot 5]
 //                         [--timelapse 5]   (minutes between frames, 0 = off)
+//                         [--threads N]     (worker threads for deciding; default
+//                                            cores - 1, at most 4; 0 = one core)
 //
 // Open http://<server>:8080/ in a browser (e.g. on the Raspberry Pi) to watch
 // and control the world. Set EVO_TOKEN=<secret> to require ?token=<secret>.
@@ -33,6 +35,7 @@ const runner = new Runner({
   dataDir: DATA,
   snapshotMinutes: Number(option('snapshot', 5)),
   timelapseMinutes: Number(option('timelapse', 5)),
+  threads: option('threads', undefined) === undefined ? undefined : Number(option('threads', undefined)),
   speed: speedOpt === undefined ? undefined : speedOpt === 'max' ? Infinity : Number(speedOpt),
   budget: budgetOpt === undefined ? undefined : Number(budgetOpt),
 });
@@ -305,5 +308,5 @@ process.on('uncaughtException', (e) => {
 runner.start();
 server.listen(PORT, HOST, () => {
   const s = runner.status();
-  log(`Evolution server v${s.version} on http://${HOST === '0.0.0.0' ? '<this machine>' : HOST}:${PORT}/ · data in ${path.resolve(DATA)} · speed ${s.speed}, CPU budget ${Math.round(s.budget * 100)}%${TOKEN ? ' · token required' : ''}`);
+  log(`Evolution server v${s.version} on http://${HOST === '0.0.0.0' ? '<this machine>' : HOST}:${PORT}/ · data in ${path.resolve(DATA)} · speed ${s.speed}, CPU budget ${Math.round(s.budget * 100)}% · ${s.threads ? s.threads + ' worker threads' : 'one core'}${TOKEN ? ' · token required' : ''}`);
 });

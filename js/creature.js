@@ -108,14 +108,17 @@
       return this.phen.senseRadius * this.sight * o.stealth;
     }
 
-    updateStealth(world, time) {
+    // `env` (optional): this step's light and temperature offsets, computed
+    // once for everyone by the simulation (see Simulation.step).
+    updateStealth(world, time, env) {
       const i = world.tileIndex(this.x, this.y);
       const cover = i < 0 ? 0 : Evo.BIOMES[world.biome[i]].cover;
       this.stealth = (1 - this.g.camo * (0.3 + 0.5 * cover)) * this.phen.visibility * (this.state === STATE.SLEEP ? 0.6 : 1);
-      this.temp = i < 0 ? 0 : world.tempAt(i, time);
+      // Same arithmetic, in the same order, as world.tempAt().
+      this.temp = i < 0 ? 0 : env ? world.tempBase[i] + env.climate + env.season + env.day : world.tempAt(i, time);
       // Day/night: how far I can see right now, and how sleepy I am (awake in
       // my own time of day, sleepy in the other). A sleeper is less alert.
-      const light = world.light(time), n = this.g.nocturnal;
+      const light = env ? env.light : world.light(time), n = this.g.nocturnal;
       this.sleepy = n * light + (1 - n) * (1 - light);
       this.sight = (light * this.phen.dayVision + (1 - light) * this.phen.nightVision) * (this.state === STATE.SLEEP ? 0.6 : 1);
     }
@@ -475,10 +478,12 @@
         if (sim.cfg.allowAsexual && this.mateSearch > 15) sim.reproduce(this, null);
       }
 
-      this.thinkTimer -= dt;
-      if (this.thinkTimer <= 0) {
-        this.thinkTimer = 0.25 + sim.rng.float(0, 0.15);
-        this.think(sim);
+      if (!sim.thinker) { // (otherwise decisions come from the thinker; see Simulation.step)
+        this.thinkTimer -= dt;
+        if (this.thinkTimer <= 0) {
+          this.thinkTimer = 0.25 + sim.rng.float(0, 0.15);
+          this.think(sim);
+        }
       }
 
       this.act(dt, sim);

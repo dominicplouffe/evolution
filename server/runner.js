@@ -17,6 +17,8 @@ for (const f of ['version', 'rng', 'config', 'brain', 'genome', 'world', 'creatu
 const Evo = globalThis.Evo;
 const DT = Evo.K.DT;
 const { Timelapse } = require('./timelapse');
+const { ThinkPool } = require('./thinkpool');
+const os = require('os');
 
 const LIVE_SETTINGS = ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual',
   'migration', 'neuralBrains', 'brainMutation', 'eventRate', 'climate', 'dayLength', 'climateSwing', 'climateCycle'];
@@ -34,6 +36,9 @@ class Runner {
     this.settingsFile = path.join(this.dataDir, 'server.json');
     this.chronicleFile = path.join(this.dataDir, 'chronicle.jsonl');
     this.snapshotEvery = (opts.snapshotMinutes || 5) * 60000;
+    // Worker threads that do the creatures' deciding (0 = everything on one core).
+    this.threads = opts.threads !== undefined && Number.isFinite(opts.threads) ? Math.max(0, Math.min(32, opts.threads))
+      : Math.max(0, Math.min(4, os.cpus().length - 1));
     // Time-lapse: a map image every N minutes (0 = off).
     this.lapseEvery = (opts.timelapseMinutes === undefined ? 5 : opts.timelapseMinutes) * 60000;
     this.lapse = this.lapseEvery > 0 ? new Timelapse(path.join(this.dataDir, 'timelapse'), Evo) : null;
@@ -81,6 +86,15 @@ class Runner {
   }
 
   use(sim) {
+    if (this.pool) this.pool.close();
+    this.pool = null;
+    if (this.threads > 0) {
+      try {
+        this.pool = sim.thinker = new ThinkPool(Evo, sim, { threads: this.threads, log });
+      } catch (e) {
+        log('Could not start worker threads, running on one core:', e.message);
+      }
+    }
     this.sim = sim;
     this.acc = 0;
     sim.onLog = (e) => this.chronicle(e);
@@ -189,7 +203,10 @@ class Runner {
     // Measured speed and CPU use, over the last few seconds.
     if (now - this.rate.at > 2000) {
       this.stats.speed = (this.sim.time - this.rate.t) / ((now - this.rate.at) / 1000);
-      this.rate = { t: this.sim.time, at: now };
+      // CPU of the whole process (all threads), as a share of one core.
+      const cpu = process.cpuUsage();
+      if (this.rate.cpu) this.stats.cpuTotal = ((cpu.user + cpu.system - this.rate.cpu) / 1000) / (now - this.rate.at);
+      this.rate = { t: this.sim.time, at: now, cpu: cpu.user + cpu.system };
       const span = this.busy.length ? now - this.busy[0][0] : 1;
       this.stats.cpu = this.busy.reduce((s, b) => s + b[1], 0) / Math.max(1, span);
     }
@@ -389,6 +406,8 @@ class Runner {
       error: this.error,
       actualSpeed: this.stats.speed,
       cpu: this.stats.cpu,
+      cpuTotal: this.stats.cpuTotal || 0,
+      threads: this.pool && this.sim.thinker === this.pool ? this.threads : 0,
       stepMs: this.stats.stepMs,
       lastSave: this.lastSave,
       uptime: process.uptime(),

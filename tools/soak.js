@@ -3,6 +3,7 @@
 // step time evolves. Anything that keeps growing would eventually break a
 // months-long server run.
 //   node tools/soak.js [simulatedHours=6] [seed=1] [reportEveryMinutes=30]
+//   THREADS=2 node tools/soak.js ...   uses the server's multi-core deciding
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -16,9 +17,13 @@ const hours = Number(process.argv[2] || 6);
 const seed = Number(process.argv[3] || 1);
 const every = Number(process.argv[4] || 30) * 60;
 const sim = new Evo.Simulation({ seed });
+if (Number(process.env.THREADS) > 0) {
+  const { ThinkPool } = require('../server/thinkpool');
+  sim.thinker = new ThinkPool(Evo, sim, { threads: Number(process.env.THREADS), log: console.log });
+}
 const t0 = Date.now();
 let next = every, steps = 0, stepStart = Date.now();
-console.log('sim_h  creatures species(alive/archived) history save_KB heap_MB ms/step events_log disasters_log wall_min');
+console.log('sim_h  creatures species(alive/archived) history save_KB heap_MB ms/step events_log disasters_log wall_min rss_MB');
 while (sim.time < hours * 3600) {
   sim.step();
   steps++;
@@ -35,6 +40,7 @@ while (sim.time < hours * 3600) {
       String(kb).padStart(7), String(Math.round(process.memoryUsage().heapUsed / 1048576)).padStart(7), ms.toFixed(2).padStart(7),
       String(sim.events.length).padStart(10), String(sim.disasters ? sim.disasters.log.length : 0).padStart(13),
       ((Date.now() - t0) / 60000).toFixed(1).padStart(8),
+      String(Math.round(process.memoryUsage().rss / 1048576)).padStart(6),
     ].join(' '));
   }
 }

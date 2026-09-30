@@ -180,7 +180,11 @@
       this.world.lastTime = this.time;
       Evo.Events.step(this, dt); // droughts, ice ages, meteors, plagues, invaders
       Evo.Climate.step(this); // slow warm/cold periods, wet/dry bands, sea level
-      for (let i = 0; i < this.creatures.length; i++) this.creatures[i].updateStealth(this.world, this.time);
+      const w = this.world, env = this.env || (this.env = {});
+      env.climate = w.climateShift(); env.season = w.seasonSwing(this.time); env.day = w.dayTemp(this.time); env.light = w.light(this.time);
+      for (let i = 0; i < this.creatures.length; i++) this.creatures[i].updateStealth(w, this.time, env);
+      // The server can decide for everyone on other CPU cores (server/thinkpool.js).
+      if (this.thinker) this.thinker.step(this, dt);
       for (let i = 0; i < this.creatures.length; i++) {
         const c = this.creatures[i];
         if (c.alive) c.update(dt, this);
