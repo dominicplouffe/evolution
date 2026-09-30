@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const zlib = require('zlib');
-for (const f of ['version', 'rng', 'config', 'brain', 'genome', 'world', 'creature', 'fame', 'events', 'tree', 'sim', 'save']) {
+for (const f of ['version', 'rng', 'config', 'brain', 'genome', 'world', 'creature', 'fame', 'events', 'tree', 'climate', 'eras', 'sim', 'save']) {
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'js', f + '.js'), 'utf8'), { filename: f + '.js' });
 }
 const Evo = globalThis.Evo;

@@ -19,6 +19,7 @@ carykh's *evolv.io*, Primer's evolution videos, *Equilinox*, Spore's creature st
 - Calories per food (meat is dense, plants are bulky), a stomach that digests over time, and an evolvable Appetite (hunger threshold)
 - Seasons, carcasses that rot, camouflage that works best in forests
 - God tools: drop creatures, grow food, smite, clone a creature
+- Climate cycles (warm/cold periods, drifting wet and dry regions, rising and falling seas), eras, a recap / "while you were away" summary and a server time-lapse
 - 24/7 server mode: the world runs on a Linux server (speed + CPU budget, crash-proof snapshots and backups, watchdog with rollback, permanent chronicle) and any browser is a live viewer
 - Family tree of species: every species' population over time, where it branched off, and the random events it lived through
 - Day/night cycle and a Nocturnal gene: night eyes, sleep, and night-active species that dodge day-hunting predators
@@ -63,13 +64,6 @@ infinite world could work like this:
    `"cx,cy"`, and unload chunks nobody has visited in a while.
 5. **Coordinates**: keep float precision safe by storing positions as
    (chunk, local offset), or by re-centering the origin now and then.
-
-## For months-long server runs
-
-- **"While you were away" summary**: what changed since your last visit.
-- **Time-lapse**: a small map image every few minutes, played back as a movie.
-- **Eras**: a readable timeline of the run ("the age of night grazers").
-- **Slow environmental change** so evolution never settles: long climate cycles, sea levels, drifting land.
 
 ## Performance, if populations need to reach 10k+
 

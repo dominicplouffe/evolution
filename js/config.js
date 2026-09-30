@@ -19,6 +19,8 @@
     { key: 'neuralBrains', label: 'Evolving brains (off = fixed rules)', type: 'bool', def: true },
     { key: 'brainMutation', label: 'Brain mutation ×', type: 'float', min: 0, max: 10, step: 0.5, def: 1 },
     { key: 'dayLength', label: 'Day length (s, 0 = always day)', type: 'int', min: 0, max: 600, step: 10, def: 60 },
+    { key: 'climateSwing', label: 'Climate cycles (±°C, 0 = off)', type: 'float', min: 0, max: 15, step: 1, def: 5 },
+    { key: 'climateCycle', label: 'Climate cycle length (years)', type: 'int', min: 5, max: 2000, step: 5, def: 60 },
     { key: 'eventRate', label: 'Random events × (0 = off)', type: 'float', min: 0, max: 5, step: 0.5, def: 1 },
     { key: 'migration', label: 'Migrants replace extinct groups', type: 'bool', def: true },
     { key: 'allowAsexual', label: 'Allow asexual fallback', type: 'bool', def: true },

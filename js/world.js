@@ -78,6 +78,66 @@
     }
   }
 
+  // Which biome a tile is, from its elevation, moisture and the sea level.
+  function biomeFor(e, m, wl) {
+    if (e < wl - 0.07) return 0;
+    if (e < wl) return 1;
+    if (e < wl + 0.035) return 2;
+    if (e > 0.9) return 7;
+    if (e > 0.8) return 6;
+    if (m < 0.35) return 3;
+    if (m < 0.66) return 4;
+    return 5;
+  }
+
+  function heatColor(t) {
+    const stops = [[-15, [40, 80, 200]], [5, [150, 190, 235]], [15, [235, 232, 215]], [25, [240, 160, 90]], [35, [200, 50, 40]]];
+    if (t <= stops[0][0]) return stops[0][1].slice();
+    for (let k = 1; k < stops.length; k++) {
+      if (t <= stops[k][0]) {
+        const [t0, c0] = stops[k - 1], [t1, c1] = stops[k];
+        const f = (t - t0) / (t1 - t0);
+        return [c0[0] + (c1[0] - c0[0]) * f, c0[1] + (c1[1] - c0[1]) * f, c0[2] + (c1[2] - c0[2]) * f];
+      }
+    }
+    return stops[stops.length - 1][1].slice();
+  }
+
+  // Map colours, one RGBA pixel per tile, into `d`: bare -> lush with the
+  // plant food, snow and ice in the cold, or the temperature (heat map).
+  // Shared by the renderer and the server's time-lapse.
+  function paintTerrain(w, time, heatMap, d) {
+    const B = BIOMES;
+    const winter = Evo.clamp((1 - w.season(time)) * 0.8, 0, 0.5);
+    const F = w.food;
+    const shift = w.climateShift() + w.seasonSwing(time) + w.dayTemp(time);
+    for (let i = 0; i < w.biome.length; i++) {
+      const b = B[w.biome[i]];
+      const o = i * 4;
+      const temp = w.tempBase[i] + shift;
+      if (heatMap) {
+        // Blue (cold) -> pale (mild) -> red (hot); water a little darker.
+        const c = heatColor(temp);
+        if (b.water) { c[0] = c[0] * 0.55 + 18; c[1] = c[1] * 0.55 + 40; c[2] = c[2] * 0.55 + 80; }
+        d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+        continue;
+      }
+      const max = F.grass.max[i] + F.leaves.max[i] + F.algae.max[i];
+      let t = max > 0 ? (F.grass.amt[i] + F.leaves.amt[i] + F.algae.amt[i]) / max : 0;
+      t *= 1 - winter * 0.6;
+      let r = b.color[0] + (b.lush[0] - b.color[0]) * t;
+      let g = b.color[1] + (b.lush[1] - b.color[1]) * t;
+      let bl = b.color[2] + (b.lush[2] - b.color[2]) * t;
+      // Snow on frozen land, ice on very cold water.
+      const snow = b.water ? Evo.clamp((-temp - 4) / 10, 0, 0.7) : Evo.clamp(-temp / 8, 0, 0.85);
+      if (snow > 0) {
+        const s = b.water ? [205, 225, 240] : [238, 242, 247];
+        r += (s[0] - r) * snow; g += (s[1] - g) * snow; bl += (s[2] - bl) * snow;
+      }
+      d[o] = r; d[o + 1] = g; d[o + 2] = bl; d[o + 3] = 255;
+    }
+  }
+
   class World {
     constructor(cfg, rng) {
       const T = Evo.K.TILE;
@@ -106,19 +166,15 @@
       const moist = Evo.tileableFbm(rng, w, h, base * 1.5, 4);
       const lushNoise = Evo.tileableFbm(rng, w, h, base * 3, 2);
       const wl = this.cfg.waterLevel;
+      // Kept so the coastline can move when the sea level changes (climate cycles).
+      this.elev = Float32Array.from(elev);
+      this.moist = Float32Array.from(moist);
+      this.lush = new Float32Array(w * h);
       for (let i = 0; i < w * h; i++) {
         const e = elev[i], m = moist[i];
-        let b;
-        if (e < wl - 0.07) b = 0;
-        else if (e < wl) b = 1;
-        else if (e < wl + 0.035) b = 2;
-        else if (e > 0.9) b = 7;
-        else if (e > 0.8) b = 6;
-        else if (m < 0.35) b = 3;
-        else if (m < 0.66) b = 4;
-        else b = 5;
+        const b = biomeFor(e, m, wl);
         this.biome[i] = b;
-        const lush = 0.7 + 0.6 * lushNoise[i];
+        const lush = (this.lush[i] = 0.7 + 0.6 * lushNoise[i]);
         const start = rng.float(0.5, 0.9);
         for (const f of FOODS) {
           const cap = (BIOMES[b].food[f.key] || 0) * lush;
@@ -154,9 +210,33 @@
       return this.cfg.dayLength > 0 ? (this.light(time) - 0.5) * 6 : 0;
     }
 
-    // The Climate setting plus any temporary shift from events (ice age).
+    // The Climate setting plus any temporary shift from events (ice age) and
+    // the slow climate cycles.
     climateShift() {
-      return this.cfg.climate + (this.extraTemp || 0);
+      return this.cfg.climate + (this.extraTemp || 0) + (this.cycleTemp || 0);
+    }
+
+    // Move the coastline to sea level `wl`: tiles whose biome changes get the
+    // plant capacity of their new biome. Returns the indices that changed.
+    setSeaLevel(wl) {
+      if (!this.elev) return [];
+      const changed = [];
+      for (let i = 0; i < this.biome.length; i++) {
+        const b = biomeFor(this.elev[i], this.moist[i], wl);
+        if (b === this.biome[i]) continue;
+        this.biome[i] = b;
+        const lush = this.lush[i];
+        for (const f of FOODS) {
+          const cap = Evo.K.PLANT_MAX * (BIOMES[b].food[f.key] || 0) * lush;
+          const food = this.food[f.key];
+          food.max[i] = cap;
+          if (food.amt[i] > cap) food.amt[i] = cap;
+        }
+        this.fertility[i] = BIOMES[b].water ? 0 : ((BIOMES[b].food.grass || 0) + (BIOMES[b].food.leaves || 0)) * lush;
+        changed.push(i);
+      }
+      if (changed.length) this.biomeVersion = (this.biomeVersion || 0) + 1;
+      return changed;
     }
 
     seasonSwing(time) {
@@ -259,9 +339,9 @@
       // Plants grow slower in the cold and stop in hard frost (below -3 °C).
       const shift = this.climateShift() + this.seasonSwing(time);
       const tb = this.tempBase;
-      // Events (drought, fertile ash) can scale growth per tile; very low
-      // growth also makes existing plants wither.
-      const gm = this.growthMul;
+      // Events (drought, fertile ash) and the wet/dry climate bands scale
+      // growth per tile; very low growth also makes existing plants wither.
+      const gm = this.growthMul, rm = this.rainMul;
       const wither = 1 - 0.01 * dt;
       for (const f of FOODS) {
         const amt = this.food[f.key].amt, max = this.food[f.key].max;
@@ -272,8 +352,8 @@
           if (t <= -3) continue;
           const warm = t >= 10 ? 1 : (t + 3) / 13;
           const p = amt[i] / m;
-          if (gm) {
-            const k = gm[i];
+          if (gm || rm) {
+            const k = (gm ? gm[i] : 1) * (rm ? rm[i] : 1);
             if (k < 0.5) amt[i] *= wither;
             amt[i] = Math.min(m, amt[i] + g * warm * k * m * (1 - 0.6 * p));
           } else amt[i] = Math.min(m, amt[i] + g * warm * m * (1 - 0.6 * p));
@@ -304,4 +384,6 @@
   Evo.FOODS = FOODS;
   Evo.SpatialHash = SpatialHash;
   Evo.World = World;
+  Evo.paintTerrain = paintTerrain;
+  Evo.biomeFor = biomeFor;
 })((globalThis.Evo = globalThis.Evo || {}));

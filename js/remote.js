@@ -225,6 +225,8 @@
       sim.species.nextId = m.speciesNextId;
       if (m.fame) sim.fame = m.fame;
       if (m.events) sim.events = m.events;
+      if (m.eras) sim.eras = m.eras;
+      Evo.Climate.apply(sim); // follows from the time: warm/cold, wet/dry, coastline
       if (m.disasters) {
         if (!sim.disasters) sim.disasters = { active: [], log: [], nextCheck: 0, nextId: 1 };
         const log = sim.disasters.log || (sim.disasters.log = []);
@@ -287,6 +289,7 @@
       this.detailBusy = false;
     }
 
+    api(path) { return api(path); }
     exportUrl() { return api('api/export'); }
     chronicleUrl() { return api('chronicle'); }
 

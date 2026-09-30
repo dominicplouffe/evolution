@@ -179,6 +179,7 @@
       this.hash.rebuild(this.creatures);
       this.world.lastTime = this.time;
       Evo.Events.step(this, dt); // droughts, ice ages, meteors, plagues, invaders
+      Evo.Climate.step(this); // slow warm/cold periods, wet/dry bands, sea level
       for (let i = 0; i < this.creatures.length; i++) this.creatures[i].updateStealth(this.world, this.time);
       for (let i = 0; i < this.creatures.length; i++) {
         const c = this.creatures[i];
@@ -265,6 +266,7 @@
         }
       }
       Evo.Tree.sample(this); // population history for the family tree
+      Evo.Eras.update(this); // chapters of the story (once a game-minute)
       if (this.time >= (this.nextPrune || 0)) {
         this.nextPrune = this.time + 600;
         this.pruneSpecies();
@@ -276,7 +278,7 @@
       for (const gene of Evo.GENES) avg[gene.key] = n ? sums[gene.key] / n : 0;
       this.stats.peakPopulation = Math.max(this.stats.peakPopulation, n);
       this.history.push({
-        t: this.time, n, ...counts, niches,
+        t: this.time, w: Date.now(), n, ...counts, niches, // w: real time, for "while you were away"
         brainDrift: n ? drift / n : 0,
         plants: this.world.totalPlant() / (this.world.cols * this.world.rows),
         species: this.species.living().length,

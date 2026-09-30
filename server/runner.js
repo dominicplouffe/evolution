@@ -11,14 +11,15 @@ const { performance } = require('perf_hooks');
 
 // Load the same simulation code the browser uses.
 const JS = path.join(__dirname, '..', 'js');
-for (const f of ['version', 'rng', 'config', 'brain', 'genome', 'world', 'creature', 'fame', 'events', 'tree', 'sim', 'save']) {
+for (const f of ['version', 'rng', 'config', 'brain', 'genome', 'world', 'creature', 'fame', 'events', 'tree', 'climate', 'eras', 'sim', 'save']) {
   vm.runInThisContext(fs.readFileSync(path.join(JS, f + '.js'), 'utf8'), { filename: f + '.js' });
 }
 const Evo = globalThis.Evo;
 const DT = Evo.K.DT;
+const { Timelapse } = require('./timelapse');
 
 const LIVE_SETTINGS = ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual',
-  'migration', 'neuralBrains', 'brainMutation', 'eventRate', 'climate', 'dayLength'];
+  'migration', 'neuralBrains', 'brainMutation', 'eventRate', 'climate', 'dayLength', 'climateSwing', 'climateCycle'];
 const KEEP = { hourly: 48, daily: 60, weekly: 104 };
 
 function log(...args) { console.log(new Date().toISOString(), ...args); }
@@ -33,6 +34,9 @@ class Runner {
     this.settingsFile = path.join(this.dataDir, 'server.json');
     this.chronicleFile = path.join(this.dataDir, 'chronicle.jsonl');
     this.snapshotEvery = (opts.snapshotMinutes || 5) * 60000;
+    // Time-lapse: a map image every N minutes (0 = off).
+    this.lapseEvery = (opts.timelapseMinutes === undefined ? 5 : opts.timelapseMinutes) * 60000;
+    this.lapse = this.lapseEvery > 0 ? new Timelapse(path.join(this.dataDir, 'timelapse'), Evo) : null;
     // Speed and CPU budget are remembered between restarts.
     const saved = this.readJson(this.settingsFile) || {};
     this.speed = opts.speed !== undefined ? opts.speed : saved.speed !== undefined ? saved.speed : 1; // Infinity = max
@@ -71,6 +75,7 @@ class Runner {
     this.last = performance.now();
     this.nextSave = Date.now() + this.snapshotEvery;
     this.nextCheck = Date.now() + 10000;
+    this.nextFrame = Date.now() + 30000;
     this.rate = { t: this.sim.time, at: this.last };
     this.loop();
   }
@@ -193,6 +198,10 @@ class Runner {
       this.nextCheck = wall + 10000;
       this.watchdog();
     }
+    if (this.lapse && wall >= this.nextFrame) {
+      this.nextFrame = wall + this.lapseEvery;
+      try { this.lapse.capture(this.sim); } catch (e) { log('Time-lapse frame failed:', e.message); }
+    }
     if (wall >= this.nextSave) {
       this.nextSave = wall + this.snapshotEvery;
       this.snapshot();
@@ -257,21 +266,27 @@ class Runner {
 
   // Every logged event, forever (the in-game log only keeps the last 60).
   chronicle(e) {
-    const line = JSON.stringify({ wall: new Date().toISOString(), t: Math.round(e.t), html: e.html, important: e.important }) + '\n';
+    const line = JSON.stringify({ wall: new Date().toISOString(), t: Math.round(e.t), seed: this.sim ? this.sim.seed : null, html: e.html, important: e.important }) + '\n';
     fs.appendFile(this.chronicleFile, line, () => {});
   }
 
-  readChronicle(limit) {
+  // The newest `limit` entries (newest first); optionally only those of world
+  // `seed` after game time `since`, or only the important ones.
+  readChronicle(limit, filter = {}) {
     try {
       const size = fs.statSync(this.chronicleFile).size;
-      const want = Math.min(size, limit * 400);
+      const want = Math.min(size, limit * 400 * (filter.important ? 6 : 1));
       const fd = fs.openSync(this.chronicleFile, 'r');
       const buf = Buffer.alloc(want);
       fs.readSync(fd, buf, 0, want, size - want);
       fs.closeSync(fd);
       const lines = buf.toString('utf8').split('\n').filter(Boolean);
       if (want < size) lines.shift(); // probably cut in half
-      return lines.slice(-limit).map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean).reverse();
+      let out = lines.map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
+      if (filter.seed !== undefined) out = out.filter((e) => e.seed === filter.seed);
+      if (filter.since !== undefined) out = out.filter((e) => e.t > filter.since);
+      if (filter.important) out = out.filter((e) => e.important);
+      return out.slice(-limit).reverse();
     } catch (e) {
       return [];
     }

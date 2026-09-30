@@ -59,6 +59,13 @@ settings are remembered across restarts.
   before that, and time is counted in whole steps so it never drifts.
 - **Chronicle**: every logged event is appended to `data/chronicle.jsonl`
   forever. **📜 Full chronicle** in the Events panel shows it.
+- **Time-lapse**: every 5 minutes (`--timelapse N`, 0 = off) the server paints
+  a small image of the whole map into `data/timelapse/` (about 25 KB each). **🎞
+  Time-lapse** in the Simulation panel plays them back (last day, week, month or
+  everything, 4–25 frames a second). All frames from the last 7 days are kept,
+  then one an hour up to 30 days, then one every 6 hours.
+- **While you were away**: when you open the viewer after at least 10 minutes
+  away, it summarises what happened since your last visit.
 - **Save now**, **Export** (download the world) and **Import** (replace the
   server's world with a file; the old one stays in the backups) are in the
   Save & load panel.
@@ -203,6 +210,25 @@ starting populations, plant growth, mutation rate, seasons and more.
   - 🐾 **Invaders**: a group of 16 creatures of a brand-new, very different
     species (plant- or meat-eaters, dressed for the local climate) walks in.
   Active events show in the corner with the time left, and are kept in saves.
+- **Climate cycles**: slow warm and cold periods (±5 °C by default, a cycle of
+  about 60 game-years; **World settings → Climate cycles** / **Climate cycle
+  length**, 0 = off), wet and dry regions that drift across the map (plants
+  grow up to 35% faster or slower there), and seas that rise and fall so coasts
+  flood and new land appears (creatures caught by the water swim to shore, or
+  drown). The corner shows the current state (🌍 +2.1 °C · seas rising).
+  Sea level only moves in worlds created with v0.16 or later.
+- **Eras**: the run is told in chapters. A new era begins when the set of major
+  niches changes for good (plant-eater niches with 10%+ of all creatures,
+  meat-eaters with 3%+, night-active ones counted separately), or when another
+  species takes the lead for 30 game-minutes. Eras get names like "The age of
+  the night swimmers", "The age without predators" or "The Gryras age"; the
+  **📖 Eras** panel lists them with their leading species, peak population,
+  new species and events.
+- **Recap**: **🕰 Recap: what changed?** (Events panel) compares the world now
+  with the last hour, day, week or the whole run: population, niches, new and
+  lost species, eras, events, climate, new records and highlights. On the
+  server, coming back after a while opens it by itself as **While you were
+  away**.
 - **Migration** (optional): if all plant-eaters or all meat-eaters die out, a small
   group wanders in after 30 s so the world can recover.
 
@@ -220,6 +246,10 @@ js/world.js         terrain, plants, carcasses, spatial hash, wrap-around
 js/creature.js      creature state + behaviour
 js/sim.js           simulation loop, births, deaths, stats, migration
 js/fame.js          Hall of fame records
+js/climate.js       slow climate cycles: warm/cold, wet/dry bands, sea level
+js/eras.js          eras: chapters of the run, detected and named automatically
+js/digest.js        "Recap" / "While you were away" summary
+js/lapse.js         time-lapse player (viewer mode)
 js/events.js        random events: drought, ice age, meteor, plague, invaders
 js/tree.js          family tree of species (population history + drawing)
 js/save.js          save/load: browser storage (gzipped) and .json files
@@ -229,6 +259,7 @@ js/ui.js            input, panels, game loop
 js/remote.js        viewer mode: mirror of a server world, live stream, commands
 server/server.js    the 24/7 server: HTTP, live stream, commands, static files
 server/runner.js    pacing (speed + CPU budget), snapshots, backups, watchdog
+server/timelapse.js map images for the time-lapse (tiny PNG encoder, thinning)
 server/evolution.service  systemd unit to run it as a service
 tools/headless.js   run the sim in Node without a browser (for balancing)
 tools/soak.js       long accelerated run that reports memory and data growth

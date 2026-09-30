@@ -63,7 +63,12 @@
       rng: sim.rng.state,
       time: sim.time,
       nextCreatureId: Evo.Creature.getNextId(),
-      world: { biome: toB64(w.biome), fertility: toB64(w.fertility), tempBase: toB64(w.tempBase), food, corpses: w.corpses },
+      world: {
+        biome: toB64(w.biome), fertility: toB64(w.fertility), tempBase: toB64(w.tempBase), food, corpses: w.corpses,
+        // Terrain shape (worlds made since v0.16), so the coastline can move.
+        elev: w.elev ? toB64(w.elev) : undefined, moist: w.moist ? toB64(w.moist) : undefined, lush: w.lush ? toB64(w.lush) : undefined,
+        seaLevel: w.seaLevel,
+      },
       creatures: sim.creatures.filter((c) => c.alive).map((c) => {
         const o = { g: packGenome(c.g), state: KEEP_STATES.has(c.state) ? c.state : 'Wandering' };
         for (const k of CREATURE_FIELDS) o[k] = c[k];
@@ -92,6 +97,9 @@
       fame: sim.fame,
       disasters: sim.disasters || null,
       tick: sim.tick,
+      climateLog: sim.climateLog,
+      eras: sim.eras,
+      nextClimate: sim.nextClimate,
       nextPrune: sim.nextPrune,
       treeEvery: sim.treeEvery,
       treeNext: sim.treeNext,
@@ -116,6 +124,12 @@
     world.biome = fromB64(d.world.biome, Uint8Array);
     world.fertility = fromB64(d.world.fertility, Float32Array);
     world.tempBase = d.world.tempBase ? fromB64(d.world.tempBase, Float32Array) : fallbackTemps(world); // before v0.9
+    if (d.world.elev) {
+      world.elev = fromB64(d.world.elev, Float32Array);
+      world.moist = fromB64(d.world.moist, Float32Array);
+      world.lush = fromB64(d.world.lush, Float32Array);
+    }
+    world.seaLevel = d.world.seaLevel;
     world.food = {};
     for (const f of Evo.FOODS) {
       const saved = d.world.food[f.key];
@@ -159,6 +173,9 @@
     sim.treeEvery = d.treeEvery;
     sim.tick = d.tick || Math.round(d.time / Evo.K.DT);
     sim.nextPrune = d.nextPrune || 0;
+    sim.climateLog = d.climateLog || {};
+    sim.eras = d.eras || null;
+    sim.nextClimate = d.nextClimate || 0;
     sim.treeNext = d.treeNext;
 
     // Creatures: construct normally (fills in every field), then restore.
@@ -181,6 +198,7 @@
       sim.disasters.active = sim.disasters.active.map((e) => log.find((x) => x.id === e.id) || e);
       Evo.Events.applyEffects(sim);
     }
+    Evo.Climate.apply(sim); // temperature, wet/dry bands (not saved: they follow from the time)
     sim.rng.state = d.rng; // restore last, after the constructors above drew numbers
     return sim;
   }

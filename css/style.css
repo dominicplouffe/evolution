@@ -68,8 +68,19 @@ button.primary:hover { background: #2a5286; }
   font-size: 12px; color: var(--text-2); display: none; gap: 10px; }
 #mapLegend .dot { display: inline-block; width: 10px; height: 10px; vertical-align: -1px; margin-right: 4px; }
 #events .big { color: var(--text); }
-#treeView { position: absolute; inset: 8px; z-index: 5; display: flex; flex-direction: column; background: var(--panel); }
-#treeView[hidden] { display: none; }
+#treeView, .overlay { position: absolute; inset: 8px; z-index: 5; display: flex; flex-direction: column; background: var(--panel); }
+.digest { overflow-y: auto; flex: 1; max-width: 760px; color: var(--text-2); }
+.digest h3 { font-size: 13px; color: var(--text); margin: 14px 0 4px; }
+.digest p { margin: 4px 0; }
+.digest ul { margin: 4px 0; padding-left: 18px; }
+.digest .digest-head { color: var(--text); font-size: 14px; }
+.digest-log li { margin: 2px 0; }
+.lapse-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: #0a0f18; border-radius: 6px; }
+#lapseImg { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.lapse-controls { margin-top: 6px; flex-wrap: nowrap; }
+#lapseSlider { flex: 1; padding: 0; }
+#lapseBtn { margin-top: 6px; }
+.recap-btn { margin-bottom: 6px; }
 #treeView .tree-help { margin: 4px 0 6px; }
 #treeAxis { width: 100%; display: block; flex-shrink: 0; }
 #treeScroll { flex: 1; overflow-y: auto; min-height: 0; }
@@ -122,6 +133,12 @@ kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius
 #fame .meta { color: var(--muted); font-size: 11px; }
 #fame .n { font-variant-numeric: tabular-nums; font-weight: 600; }
 #fame .live { color: #5bc4a6; }
+#eras { max-height: 320px; overflow-y: auto; }
+#eras .era { padding: 6px 4px; border-bottom: 1px solid #1e2734; }
+#eras .era.now { border-left: 2px solid var(--accent); padding-left: 8px; }
+#eras .meta { color: var(--muted); font-size: 11px; }
+#eras .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0; }
+.chip { background: var(--panel-2); border-radius: 10px; padding: 1px 7px; font-size: 11px; color: var(--text-2); }
 #events { max-height: 150px; overflow-y: auto; font-size: 12px; }
 #events div { padding: 2px 0; border-bottom: 1px solid #1e2734; color: var(--text-2); }
 #events .t { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }

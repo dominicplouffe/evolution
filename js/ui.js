@@ -60,8 +60,8 @@
         try {
           this.remote = new Evo.Remote(this);
           const sim = await this.remote.connect();
-          this.enterRemoteMode();
           this.useSim(sim, true);
+          this.enterRemoteMode();
           this.toast('Connected to the world on the server');
           this.last = performance.now();
           requestAnimationFrame((t) => this.frame(t));
@@ -101,12 +101,33 @@
       $('#exportBtn').title = 'Download the server world as a file';
       $('#importBtn').title = 'Replace the server world with a file you exported';
       $('#chronicleLink').hidden = false;
+      this.lapse = new Evo.LapsePlayer(this);
+      $('#lapseBtn').addEventListener('click', () => this.lapse.toggle());
+      try { this.trackVisits(); } catch (e) { console.warn('Visit tracking failed', e); } // never worth losing the viewer over
       $('#chronicleLink').href = this.remote.chronicleUrl();
       $('#speeds button[data-speed="32"]').title = 'As fast as the CPU budget allows';
       const budget = $('#cpuBudget');
       budget.addEventListener('input', () => { $('#cpuBudgetVal').textContent = budget.value + '%'; });
       budget.addEventListener('change', () => this.remote.cmd({ cmd: 'budget', value: Number(budget.value) / 100 }));
       document.title = 'Evolution · server';
+    }
+
+    // Remember when this viewer last watched the world; coming back after a
+    // while opens "While you were away".
+    trackVisits() {
+      const KEY = 'evolution.lastVisit';
+      let prev = null;
+      try { prev = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { /* none */ }
+      const sim = this.sim;
+      if (prev && prev.seed === sim.seed && prev.t < sim.time) this.prevVisit = prev;
+      const note = () => {
+        if (document.visibilityState !== 'visible' || !this.sim) return;
+        try { localStorage.setItem(KEY, JSON.stringify({ seed: this.sim.seed, t: this.sim.time, wall: Date.now() })); } catch (e) { /* ignore */ }
+      };
+      note();
+      setInterval(note, 30000);
+      document.addEventListener('visibilitychange', note);
+      if (this.prevVisit && Date.now() - this.prevVisit.wall > 10 * 60000 && sim.time - this.prevVisit.t > 120) this.openDigest('visit', true);
     }
 
     // Show the server's speed, CPU use and saves; follow changes made from
@@ -127,6 +148,29 @@
         `Up ${up} · ${s.memoryMB} MB · ${s.lastSave ? `saved ${ago(Date.now() - s.lastSave.at)} (${Math.round(s.lastSave.bytes / 1024)} KB)` : 'not saved yet'}` +
         (this.remote.connected ? '' : '<br><span style="color:#e66">Connection lost, reconnecting…</span>');
       this.setSaveStatus('The server saves every few minutes and keeps hourly, daily and weekly backups.');
+    }
+
+    // "Recap": compare the world now with your last visit, or N hours ago.
+    async openDigest(range, welcome) {
+      const sim = this.sim;
+      const sel = $('#digestRange');
+      sel.querySelector('option[value="visit"]').hidden = !this.prevVisit;
+      if (range === 'visit' && !this.prevVisit) range = '24';
+      sel.value = range;
+      let from, wallMs = 0;
+      if (range === 'visit') { from = this.prevVisit.t; wallMs = Date.now() - this.prevVisit.wall; }
+      else if (Number(range) > 0) { wallMs = Number(range) * 3600000; from = Evo.Digest.timeAtWall(sim, Date.now() - wallMs); }
+      else from = sim.history.length ? sim.history[0].t : 0;
+      $('#digestTitle').textContent = welcome ? '🕰 While you were away' : '🕰 Recap';
+      $('#digestView').hidden = false;
+      let highlights;
+      if (this.remote) {
+        try {
+          const r = await fetch(this.remote.api(`api/chronicle?important=1&limit=12&seed=${sim.seed}&since=${Math.floor(from)}`), { cache: 'no-store' });
+          highlights = await r.json();
+        } catch (e) { highlights = []; }
+      } else highlights = sim.events.filter((e) => e.important && e.t > from);
+      $('#digestBody').innerHTML = Evo.Digest.build(sim, from, wallMs, highlights);
     }
 
     newWorld() {
@@ -488,6 +532,9 @@
         this.renderer.cam.zoom = Math.max(this.renderer.cam.zoom, 1.5);
       });
 
+      $('#recapBtn').addEventListener('click', () => this.openDigest(this.prevVisit ? 'visit' : '24'));
+      $('#digestRange').addEventListener('change', (e) => this.openDigest(e.target.value));
+      $('#digestClose').addEventListener('click', () => { $('#digestView').hidden = true; });
       $('#speciesList').addEventListener('click', (e) => {
         const row = e.target.closest('.sp');
         if (row) this.followSpecies(Number(row.dataset.id));
@@ -503,7 +550,12 @@
         const speeds = [0.5, 1, 2, 4, 8, 32];
         if (key >= '1' && key <= '6') this.setSpeed(speeds[Number(key) - 1]);
         if (key === 'f' && this.selected) this.follow = !this.follow;
-        if (key === 'escape') { if (this.tree.open) this.tree.toggle(false); else this.select(null); }
+        if (key === 'escape') {
+          if (!$('#digestView').hidden) $('#digestView').hidden = true;
+          else if (this.lapse && this.lapse.open) this.lapse.toggle(false);
+          else if (this.tree.open) this.tree.toggle(false);
+          else this.select(null);
+        }
         if (key === 't') this.tree.toggle();
         if (key === '0' || key === 'home') this.fitMap();
         const tools = { i: 'inspect', h: 'herbivore', c: 'carnivore', g: 'food', x: 'smite' };
@@ -527,7 +579,7 @@
       form.onchange = () => {
         this.readSettings();
         // Some settings can change on the fly.
-        const live = ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration', 'neuralBrains', 'brainMutation', 'eventRate', 'climate', 'dayLength'];
+        const live = ['plantGrowth', 'mutationScale', 'seasonStrength', 'seasonLength', 'maxPopulation', 'allowAsexual', 'migration', 'neuralBrains', 'brainMutation', 'eventRate', 'climate', 'dayLength', 'climateSwing', 'climateCycle'];
         if (this.remote) { this.remote.cmd({ cmd: 'settings', cfg: this.cfg }); return; }
         for (const k of live) this.sim.cfg[k] = this.cfg[k];
       };
@@ -611,6 +663,12 @@
           🦠 <b>Plague</b>: strikes the most numerous species (purple halo = sick) and spreads to close herd-mates;
           herding creatures catch it more, unusual DNA resists it, and survivors are immune.
           🐾 <b>Invaders</b>: a group of a brand-new, very different species walks in.</li>
+          <li><b>Climate cycles</b>: over dozens of game-years the world slowly warms and cools, wet and dry regions
+          drift across the map (plants grow faster or slower there), and the seas rise and fall, flooding coasts and
+          uncovering new land. The corner shows where the cycle is now. Adjust or turn off in World settings.</li>
+          <li><b>Eras</b>: the run is told in chapters. When the set of major niches changes for good, or a new species
+          takes the lead, a new era begins, with a name like "The age of the night swimmers" (📖 Eras panel).
+          <b>🕰 Recap</b> in the Events panel shows what changed over the last hour, day or week.</li>
         </ul>
         <p><b>Genes</b></p>
         <ul>${Evo.GENES.map((g) => `<li><b>${esc(g.label)}</b> — ${esc(g.desc)}</li>`).join('')}</ul>`;
@@ -640,7 +698,7 @@
         // Keep the selected creature's details fresh (every ~½ s).
         if (this.selected && this.selected.alive && (this.detailTick = (this.detailTick || 0) + 1) % 2 === 0) this.remote.refreshDetail(this.selected);
       }
-      $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}${this.dayHud(sim)}<br><span class="muted">${rate} · seed ${sim.seed}</span>${this.hover ? `<br>🌡 ${fmt(sim.world.tempAtPoint(this.wrapPoint(this.hover).x, this.wrapPoint(this.hover).y, sim.time))} °C here` : ''}${this.disasterHud(sim)}<br><span class="muted small">v${Evo.VERSION.number} · ${Evo.VERSION.date}</span>`;
+      $('#hud').innerHTML = `<b>${Evo.fmtTime(sim.time)}</b> · Year ${Math.floor(sim.time / sim.cfg.seasonLength) + 1} · ${icon} ${season}${this.dayHud(sim)}<br><span class="muted">${rate} · seed ${sim.seed}</span>${this.hover ? `<br>🌡 ${fmt(sim.world.tempAtPoint(this.wrapPoint(this.hover).x, this.wrapPoint(this.hover).y, sim.time))} °C here` : ''}${this.disasterHud(sim)}${Evo.Climate.describe(sim) ? '<br><span class="muted">' + Evo.Climate.describe(sim) + '</span>' : ''}<br><span class="muted small">v${Evo.VERSION.number} · ${Evo.VERSION.date}</span>`;
 
       // Closed panels aren't redrawn (they catch up when opened).
       const open = (id) => $('#' + id).open;
@@ -653,6 +711,7 @@
         if (open('inspectorPanel')) this.updateInspector();
         this.updateSpecies();
         if (open('panelFame')) this.updateFame();
+        if (open('panelEras')) this.updateEras();
       }
       this.tree.tick();
       if (open('panelEvents')) $('#events').innerHTML = sim.events.map((e) => `<div class="${e.important ? 'big' : ''}"><span class="t">${Evo.fmtTime(e.t)}</span>${e.important ? '⭐ ' : ''}${e.html}</div>`).join('') ||
@@ -681,6 +740,32 @@
         const extra = e.kind === 'iceAge' ? ` ${fmt(e.depth)} °C` : '';
         return `<br><span class="event-tag">${T.icon} ${T.label}${extra} · ${Evo.fmtTime(left)} left</span>`;
       }).join('');
+    }
+
+    // The chapters of the run, newest first.
+    updateEras() {
+      const sim = this.sim;
+      const list = (sim.eras && sim.eras.list) || [];
+      $('#eraCount').textContent = list.length ? `(${list.length})` : '';
+      const year = sim.cfg.seasonLength;
+      const yr = (t) => Math.floor(t / year) + 1;
+      const span = (a, b) => { const y = (b - a) / year; return y < 1 ? `${Math.max(1, Math.round((b - a) / 60))} min` : `${fmt(y, y < 10 ? 1 : 0)} years`; };
+      const icons = Evo.Events.TYPES;
+      $('#eras').innerHTML = list.slice().reverse().slice(0, 50).map((e) => {
+        const end = e.end === null ? sim.time : e.end;
+        const d = e.dominant;
+        const niches = e.niches.map((k) => {
+          const base = k.replace('night ', '');
+          return `<span class="chip"><span class="swatch" style="background:${Evo.NICHE_COLORS[base]}"></span>${esc(Evo.Eras.plural(k))}</span>`;
+        }).join('');
+        const ev = e.events.map((x) => icons[x.kind] ? icons[x.kind].icon : '').join('');
+        return `<div class="era${e.end === null ? ' now' : ''}">
+          <div><b>${e.n}. ${esc(e.name)}</b></div>
+          <div class="meta">Year ${yr(e.start)} – ${e.end === null ? 'now' : 'year ' + yr(end)} · ${span(e.start, end)}</div>
+          <div class="chips">${niches}</div>
+          <div class="meta">${d ? `Led by <span class="swatch" style="background:${d.color}"></span>${esc(d.name)} · ` : ''}peak ${e.peak} creatures · ${e.newSpecies} new species${ev ? ' · ' + ev : ''}</div>
+        </div>`;
+      }).join('') || '<span class="muted">The first era begins after a minute…</span>';
     }
 
     updateFame() {

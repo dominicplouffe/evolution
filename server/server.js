@@ -3,6 +3,7 @@
 //
 //   node server/server.js [--port 8080] [--host 0.0.0.0] [--data ./data]
 //                         [--speed 1|max] [--budget 0.5] [--snapshot 5]
+//                         [--timelapse 5]   (minutes between frames, 0 = off)
 //
 // Open http://<server>:8080/ in a browser (e.g. on the Raspberry Pi) to watch
 // and control the world. Set EVO_TOKEN=<secret> to require ?token=<secret>.
@@ -31,6 +32,7 @@ const budgetOpt = option('budget', undefined);
 const runner = new Runner({
   dataDir: DATA,
   snapshotMinutes: Number(option('snapshot', 5)),
+  timelapseMinutes: Number(option('timelapse', 5)),
   speed: speedOpt === undefined ? undefined : speedOpt === 'max' ? Infinity : Number(speedOpt),
   budget: budgetOpt === undefined ? undefined : Number(budgetOpt),
 });
@@ -41,7 +43,7 @@ const runner = new Runner({
 // levels, every 4 s), and 'reset' when the whole world was replaced.
 const clients = new Set();
 let lastSpeciesSig = new Map();
-let lastEventsJson = '', lastFameJson = '';
+let lastEventsJson = '', lastFameJson = '', lastErasJson = '';
 
 function send(res, event, data) {
   res.write(`event: ${event}\ndata: ${data}\n\n`);
@@ -93,9 +95,10 @@ function metaData(full) {
   }
   if (!full) lastSpeciesSig = sig;
   // The log and records are only sent when they changed.
-  const eventsJson = JSON.stringify(sim.events), fameJson = JSON.stringify(sim.fame);
+  const eventsJson = JSON.stringify(sim.events), fameJson = JSON.stringify(sim.fame), erasJson = JSON.stringify(sim.eras);
   const sendEvents = full || eventsJson !== lastEventsJson, sendFame = full || fameJson !== lastFameJson;
-  if (!full) { lastEventsJson = eventsJson; lastFameJson = fameJson; }
+  const sendEras = full || erasJson !== lastErasJson;
+  if (!full) { lastEventsJson = eventsJson; lastFameJson = fameJson; lastErasJson = erasJson; }
   const corpses = [];
   for (const c of sim.world.corpses) corpses.push(Math.round(c.x), Math.round(c.y), Math.round(c.meat * 10) / 10, c.species || 0);
   return JSON.stringify({
@@ -109,6 +112,7 @@ function metaData(full) {
     speciesNextId: sim.species.nextId,
     fame: sendFame ? sim.fame : undefined,
     events: sendEvents ? sim.events : undefined,
+    eras: sendEras ? sim.eras : undefined,
     disasters: sim.disasters ? { active: sim.disasters.active } : null,
     extraTemp: sim.world.extraTemp || 0,
     corpses,
@@ -134,7 +138,7 @@ setInterval(() => { if (clients.size) broadcast('frame', frameData()); }, 200);
 setInterval(() => { if (clients.size) broadcast('meta', metaData()); }, 1000);
 setInterval(() => { if (clients.size) broadcast('food', foodData()); }, 4000);
 setInterval(() => { for (const res of clients) res.write(': keep-alive\n\n'); }, 15000);
-runner.onReset = () => { lastSpeciesSig = new Map(); lastEventsJson = lastFameJson = ''; broadcast('reset', '{}'); };
+runner.onReset = () => { lastSpeciesSig = new Map(); lastEventsJson = lastFameJson = lastErasJson = ''; broadcast('reset', '{}'); };
 
 // ------------------------------------------------------------ HTTP
 const ROOT = path.join(__dirname, '..');
@@ -250,7 +254,25 @@ const server = http.createServer(async (req, res) => {
       runner.importWorld(JSON.parse(body.toString('utf8')));
       return sendJson(req, res, { ok: true });
     }
-    if (p === '/api/chronicle') return sendJson(req, res, runner.readChronicle(Math.min(5000, Number(url.searchParams.get('limit')) || 500)));
+    if (p === '/api/chronicle') {
+      const q = url.searchParams;
+      return sendJson(req, res, runner.readChronicle(Math.min(5000, Number(q.get('limit')) || 500), {
+        seed: q.has('seed') ? Number(q.get('seed')) : undefined,
+        since: q.has('since') ? Number(q.get('since')) : undefined,
+        important: q.get('important') === '1',
+      }));
+    }
+    if (p === '/api/timelapse') {
+      const since = Number(url.searchParams.get('since')) || 0;
+      return sendJson(req, res, runner.lapse ? runner.lapse.list().filter((e) => e.wall >= since) : []);
+    }
+    if (p === '/api/timelapse/frame') {
+      const img = runner.lapse && runner.lapse.file(url.searchParams.get('f') || '');
+      if (!img) { res.writeHead(404); res.end(); return; }
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=31536000, immutable' });
+      res.end(img);
+      return;
+    }
     if (p === '/chronicle') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(chroniclePage(runner.readChronicle(2000)));
